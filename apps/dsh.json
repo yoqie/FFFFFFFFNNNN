@@ -82,7 +82,26 @@
           "size": 136487881
         }
       }
+    },
+    "0.2.1-alpha.3": {
+      "version": "0.2.1-alpha.3",
+      "release_note": "DSH v0.2.1-alpha.3 飞牛 fnOS 自动构建（arm/x86），更新内容见上游 deepseek-ai/deepseek-harness。",
+      "updated_at": "2026-10-14T23:01:20Z",
+      "packages": {
+        "x86": {
+          "version": "0.2.1-alpha.3",
+          "download_url": "https://github.com/yoqie/DSH_FNOS/releases/download/v0.2.1-alpha.3/DSH_v0.2.1-alpha.3_amd64.fpk",
+          "sha256": "acf49484dd90f636aa7af061962f0cbed9e094051efac024b0c81c4084e77cc0",
+          "size": 166169022
+        },
+        "arm": {
+          "version": "0.2.1-alpha.3",
+          "download_url": "https://github.com/yoqie/DSH_FNOS/releases/download/v0.2.1-alpha.3/DSH_v0.2.1-alpha.3_arm64.fpk",
+          "sha256": "3e595c2f256cad6f21ad21d24fbcccdb7fa97738ff7e317e7463c2b6506dc3e2",
+          "size": 169125485
+        }
+      }
     }
   },
-  "updated_at": "2026-10-14T00:11:05.496Z"
+  "updated_at": "2026-10-14T23:45:17.255Z"
 }

@@ -11,4 +11,4 @@
 | 应用 | 描述 | 上游版本 |
 |------|------|----------|
 | [1Panel](build/1panel/) | 开源服务器运维管理面板，提供可视化的 Linux 服务器管理。 | 2.2.5 |
-| [DSH](build/dsh/) | DeepSeek Harness（DSH）飞牛NAS版：自动跟进上游最新版本构建，amd64/arm64 双架构原生安装包，飞牛桌面一键打开。 | 0.2.1-alpha.2 |
+| [DSH](build/dsh/) | DeepSeek Harness（DSH）飞牛NAS版：自动跟进上游最新版本构建，amd64/arm64 双架构原生安装包，飞牛桌面一键打开。 | 0.2.1-alpha.3 |
