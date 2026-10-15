@@ -153,9 +153,19 @@ if (synced === 0) throw new Error(`上游 ${UPSTREAM_REPOS.join(' + ')} 没有�
 
 const latest = Object.keys(detail.releases).sort(versionCompare).pop();
 // 键序统一为"旧→新"（与原 deepseek-harness.json 一致，最后一个为最新版）
+const ordered = Object.keys(detail.releases).sort(versionCompare);
+// 索引里只保留最新 KEEP_VERSIONS 个版本（默认 1）：
+// 历史版本的包不在本源镜像里（指向上游单架构 _all.fpk，x86 机器装了会出错），
+// 对应的 Release 也已由 prune-releases.mjs 清理，留在列表里只会让应用中心变乱。
+const KEEP_VERSIONS = Number(process.env.DSH_KEEP_VERSIONS || '1');
+const kept = KEEP_VERSIONS > 0 ? ordered.slice(-KEEP_VERSIONS) : ordered;
+const dropped = ordered.slice(0, Math.max(0, ordered.length - kept.length));
 const sortedReleases = {};
-for (const v of Object.keys(detail.releases).sort(versionCompare)) sortedReleases[v] = detail.releases[v];
+for (const v of kept) sortedReleases[v] = detail.releases[v];
 detail.releases = sortedReleases;
+if (dropped.length) {
+  console.log(`索引只保留最新 ${kept.length} 个版本，移除历史条目：${dropped.join(', ')}`);
+}
 detail.updated_at = new Date().toISOString();
 await writeJson(detailPath, detail);
 
