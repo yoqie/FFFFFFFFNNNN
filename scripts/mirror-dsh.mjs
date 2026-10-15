@@ -1,0 +1,223 @@
+#!/usr/bin/env node
+/**
+ * mirror-dsh.mjs —— 把 DSH 的 fpk 镜像到本源 Release，让 DSH 像 1panel 一样显示在 Releases
+ *
+ * 背景：DSH 由上游 yoqie/DSH_FNOS 构建并发布 Release，本源以前只做索引同步、不二次分发 fpk。
+ * 现在本源把 fpk 二次分发到自己的 Release（tag: dsh-<version>），
+ * apps/dsh.json 里的下载地址随之指向本源，不再依赖上游仓库。
+ *
+ * 运行顺序（见 .github/workflows/dsh-sync.yml）：
+ *   sync-dsh.mjs → mirror-dsh.mjs → update-index.mjs
+ * sync-dsh.mjs 每次都会把 download_url 重置回上游地址，mirror-dsh.mjs 负责改回本源地址，
+ * 因此本脚本是幂等的：已镜像且资产完整的版本直接跳过。
+ *
+ * 用法：
+ *   node scripts/mirror-dsh.mjs            # 只镜像索引里的最新版本（默认）
+ *   node scripts/mirror-dsh.mjs --all      # 镜像索引里的全部版本（首次全量补档用）
+ *   node scripts/mirror-dsh.mjs --force    # 已存在同名同大小资产时也重新上传
+ *   node scripts/mirror-dsh.mjs --dry-run  # 只打印计划，不创建 Release、不下载上传
+ *
+ * 环境变量：
+ *   GH_TOKEN / GITHUB_TOKEN  必需（需 contents:write 权限），工作流里用 github.token
+ *   REPO                     默认 yoqie/FnDepot
+ *
+ * 依赖：curl（ubuntu-latest 与飞牛系统均自带），用于流式上传大文件，避免整包读入内存。
+ */
+
+import { promises as fs, createWriteStream } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const argv = process.argv.slice(2);
+const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 && argv[i + 1] ? argv[i + 1] : d; };
+const has = (k) => argv.includes(k);
+
+const REPO = opt('--repo', process.env.REPO || 'yoqie/FnDepot');
+const SLUG = 'dsh';
+const ALL = has('--all');
+const FORCE = has('--force');
+const DRY = has('--dry-run');
+const TOKEN = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || '';
+
+const API = 'https://api.github.com';
+const UA = 'FnDepot-mirror';
+
+const readJson = async (p) => JSON.parse(await fs.readFile(p, 'utf8'));
+
+function ghHeaders(json) {
+  const h = { 'User-Agent': UA, Accept: 'application/vnd.github+json' };
+  if (json) h['Content-Type'] = 'application/json';
+  if (TOKEN) h.Authorization = `Bearer ${TOKEN}`;
+  return h;
+}
+
+async function api(method, endpoint, body) {
+  const url = endpoint.startsWith('http') ? endpoint : API + endpoint;
+  const r = await fetch(url, {
+    method,
+    headers: ghHeaders(!!body),
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (r.status === 404) return null;
+  const text = await r.text();
+  if (!r.ok) throw new Error(`GitHub API ${method} ${endpoint} -> HTTP ${r.status}: ${text.slice(0, 300)}`);
+  return text ? JSON.parse(text) : null;
+}
+
+// 与 sync-dsh.mjs 保持一致：0.2.0 正式版 > 0.2.0-rc.1 先行版
+function versionCompare(a, b) {
+  const parse = (v) => String(v).replace(/^v/, '').split(/[.\-+]/);
+  const num = (x) => (/^\d+$/.test(x) ? Number(x) : x);
+  const pa = parse(a);
+  const pb = parse(b);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
+    if (pa[i] === undefined) return 1;
+    if (pb[i] === undefined) return -1;
+    const x = num(pa[i]);
+    const y = num(pb[i]);
+    if (x === y) continue;
+    const xn = typeof x === 'number';
+    const yn = typeof y === 'number';
+    if (xn && yn) return x < y ? -1 : 1;
+    if (xn !== yn) return xn ? 1 : -1;
+    return x < y ? -1 : 1;
+  }
+  return 0;
+}
+
+const mb = (n) => `${(n / 1024 / 1024).toFixed(1)}MB`;
+
+/** 流式下载并计算 sha256，避免大包进内存 */
+async function download(url, dest) {
+  const r = await fetch(url, { headers: { 'User-Agent': UA }, redirect: 'follow' });
+  if (!r.ok) throw new Error(`下载失败 ${url} -> HTTP ${r.status}`);
+  const hash = crypto.createHash('sha256');
+  let size = 0;
+  const src = Readable.fromWeb(r.body);
+  src.on('data', (c) => { hash.update(c); size += c.length; });
+  await pipeline(src, createWriteStream(dest));
+  return { sha256: hash.digest('hex'), size };
+}
+
+/** 用 curl 以 -T 流式上传（文件不读进内存），失败时带上响应体报错 */
+function uploadAsset(releaseId, file, name) {
+  const url = `https://uploads.github.com/repos/${REPO}/releases/${releaseId}/assets?name=${encodeURIComponent(name)}`;
+  const args = [
+    '-sS', '--fail-with-body', '--retry', '3', '--retry-delay', '5',
+    '-X', 'POST', '-T', file,
+    '-H', `Authorization: Bearer ${TOKEN}`,
+    '-H', 'Content-Type: application/octet-stream',
+    '-H', 'Accept: application/vnd.github+json',
+    url,
+  ];
+  let out;
+  try {
+    out = execFileSync('curl', args, { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+  } catch (e) {
+    throw new Error(`上传 ${name} 失败: ${String(e.stdout || e.message).slice(0, 500)}`);
+  }
+  let json;
+  try { json = JSON.parse(out); } catch { throw new Error(`上传 ${name} 返回非 JSON: ${out.slice(0, 300)}`); }
+  if (!json.id) throw new Error(`上传 ${name} 未返回资产 id: ${out.slice(0, 300)}`);
+  return json;
+}
+
+const ownPrefix = (tag) => `https://github.com/${REPO}/releases/download/${tag}/`;
+
+const detailPath = path.join(ROOT, 'apps', `${SLUG}.json`);
+const detail = await readJson(detailPath);
+const allVersions = Object.keys(detail.releases || {});
+if (allVersions.length === 0) throw new Error('apps/dsh.json 里没有 releases，先运行 sync-dsh.mjs');
+
+const sorted = [...allVersions].sort(versionCompare);
+const targets = ALL ? sorted : [sorted[sorted.length - 1]];
+if (!TOKEN && !DRY) throw new Error('缺少 GH_TOKEN / GITHUB_TOKEN（需要 contents:write）');
+
+console.log(`镜像目标：${targets.join(', ')} → ${REPO} Releases（${DRY ? 'dry-run' : '正式执行'}）`);
+
+const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'dsh-mirror-'));
+let changed = 0;
+const failed = [];
+
+for (const version of targets) {
+  const rel = detail.releases[version];
+  const tag = `dsh-${version}`;
+  const packages = Object.entries(rel.packages || {});
+
+  try {
+    for (const [arch, pkg] of packages) {
+      const file = decodeURIComponent(new URL(pkg.download_url).pathname.split('/').pop());
+      if (pkg.download_url.startsWith(ownPrefix(tag)) && !FORCE) {
+        console.log(`${tag} ${arch}: 已是本源地址，跳过（${file}）`);
+        continue;
+      }
+      if (DRY) {
+        console.log(`[dry-run] ${tag} ${arch}: 将镜像 ${file} → ${ownPrefix(tag)}${file}`);
+        continue;
+      }
+
+      let release = await api('GET', `/repos/${REPO}/releases/tags/${tag}`);
+      if (!release) {
+        release = await api('POST', `/repos/${REPO}/releases`, {
+          tag_name: tag,
+          name: `DSH ${version}`,
+          body: rel.release_note || `DSH ${version} 飞牛 fnOS 安装包（本源镜像，上游 deepseek-ai/deepseek-harness）。`,
+          draft: false,
+          prerelease: false,
+        });
+        console.log(`${tag}: 已创建 Release`);
+      }
+
+      const existing = (release.assets || []).find((a) => a.name === file);
+      const dest = path.join(tmpRoot, file);
+      console.log(`${tag} ${arch}: 下载 ${file} …`);
+      const { sha256, size } = await download(pkg.download_url, dest);
+      if (pkg.sha256 && sha256 !== pkg.sha256) {
+        throw new Error(`sha256 校验失败 ${file}: 索引 ${pkg.sha256} ≠ 实际 ${sha256}`);
+      }
+
+      if (existing && existing.size === size && !FORCE) {
+        console.log(`${tag} ${arch}: 资产已存在且大小一致（${mb(size)}），跳过上传`);
+      } else {
+        if (existing) {
+          await api('DELETE', `/repos/${REPO}/releases/assets/${existing.id}`);
+          console.log(`${tag} ${arch}: 已删除旧资产 ${file}`);
+        }
+        process.stdout.write(`${tag} ${arch}: 上传 ${file}（${mb(size)}）… `);
+        uploadAsset(release.id, dest, file);
+        process.stdout.write('完成\n');
+      }
+      await fs.rm(dest, { force: true });
+
+      pkg.download_url = `${ownPrefix(tag)}${file}`;
+      pkg.sha256 = sha256;
+      pkg.size = size;
+      changed += 1;
+    }
+  } catch (e) {
+    failed.push(`${tag}: ${e.message}`);
+    console.error(`✗ ${tag}: ${e.message}`);
+  }
+}
+
+await fs.rm(tmpRoot, { recursive: true, force: true });
+
+if (changed > 0 && !DRY) {
+  detail.updated_at = new Date().toISOString();
+  await fs.writeFile(detailPath, JSON.stringify(detail, null, 2) + '\n');
+  console.log(`apps/${SLUG}.json 已更新：${changed} 个包指向本源 Release`);
+} else if (!DRY) {
+  console.log('apps/dsh.json 无需改动');
+}
+
+if (failed.length > 0) {
+  console.error(`镜像失败 ${failed.length} 项：\n- ${failed.join('\n- ')}`);
+  process.exit(1);
+}
+console.log('mirror done.');

@@ -10,6 +10,9 @@
  *   apps/dsh.json        应用详情（releases[].packages: arm/x86 下载地址 + sha256 + size）
  *   build/dsh/meta.json  应用元数据（供 update-index.mjs 重建 fnpack.json / README.md）
  *
+ * 注意：本脚本会把 download_url 重置为上游 Release 地址；工作流随后运行
+ * scripts/mirror-dsh.mjs 把最新版 fpk 镜像到本源 Release 并改回本源地址。
+ *
  * 用法：node scripts/sync-dsh.mjs [--repo OWNER/NAME]
  * 环境变量：GH_TOKEN / GITHUB_TOKEN（可选，提高 API 限额）
  *           DSH_UPSTREAM_REPO（逗号分隔多仓库，靠后者优先；默认 cliii-one/DSH_FNOS,yoqie/DSH_FNOS）
