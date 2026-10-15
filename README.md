@@ -1,10 +1,10 @@
-# FnDepot · 1Panel 跟随源
+# FnDepot · 跟随源
 
-飞牛 fnOS 个人第三方应用源——由 GitHub Actions 跟随 [1Panel 官方](https://github.com/1Panel-dev/1Panel)、官方 Node.js 与 `apps.allowlist.txt` 名单中的应用市场应用自动打包更新。
+飞牛 fnOS 个人第三方应用源——由 GitHub Actions 跟随 [1Panel 官方](https://github.com/1Panel-dev/1Panel)、[DSH 上游](https://github.com/cliii-one/DSH_FNOS)、官方 Node.js 与 `apps.allowlist.txt` 名单中的应用市场应用自动打包更新。
 
 - 源地址（添加到 FnDepot/AppCenter 第三方源）：`https://github.com/yoqie/FnDepot` 或 `https://raw.githubusercontent.com/yoqie/FnDepot/main/fnpack.json`
-- 跟随：1Panel 面板 v2 + `apps.allowlist.txt` 名单中的应用市场应用
-- 同步频率：每天一次（可手动触发），有新版本时自动打包 FPK 并发布 Release。
+- 跟随：1Panel 面板 v2、DSH（DeepSeek Harness，amd64/arm64 双架构） + `apps.allowlist.txt` 名单中的应用市场应用
+- 同步频率：每天一次（可手动触发），有新版本时自动打包 FPK 并发布 Release；同一应用只保留最新版 Release。
 
 ## 应用列表
 

@@ -1,15 +1,15 @@
 {
   "schema_version": "2",
   "source_info": {
-    "name": "1Panel 跟随源",
+    "name": "FnDepot 跟随源",
     "author": "FnDepot",
     "homepage": "https://github.com/yoqie/FnDepot",
-    "description": "跟随 1Panel 官方应用源自动打包更新的飞牛 fnOS 第三方应用源（Docker 型 FPK）。"
+    "description": "跟随上游官方源自动打包更新的飞牛 fnOS 第三方应用源（原生 FPK）：1Panel 面板 v2、DSH（DeepSeek Harness，amd64/arm64 双架构）等。"
   },
   "apps": {
     "1panel": {
       "details_url": "apps/1panel.json",
-      "details_updated_at": "2026-10-15T14:06:20.264Z",
+      "details_updated_at": "2026-10-15T14:15:33.711Z",
       "display_name": "1Panel",
       "desc": "开源服务器运维管理面板，提供可视化的 Linux 服务器管理。",
       "platform": [

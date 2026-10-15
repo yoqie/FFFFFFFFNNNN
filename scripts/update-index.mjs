@@ -62,8 +62,8 @@ for (const slug of allSlugs) {
 }
 await writeJson(path.join(ROOT, 'fnpack.json'), fnpack);
 await fs.writeFile(path.join(ROOT, 'README.md'),
-  `# FnDepot · 1Panel 跟随源\n\n飞牛 fnOS 个人第三方应用源——由 GitHub Actions 跟随 [1Panel 官方](https://github.com/1Panel-dev/1Panel)、官方 Node.js 与 \`apps.allowlist.txt\` 名单中的应用市场应用自动打包更新。\n\n` +
+  `# FnDepot · 跟随源\n\n飞牛 fnOS 个人第三方应用源——由 GitHub Actions 跟随 [1Panel 官方](https://github.com/1Panel-dev/1Panel)、[DSH 上游](https://github.com/cliii-one/DSH_FNOS)、官方 Node.js 与 \`apps.allowlist.txt\` 名单中的应用市场应用自动打包更新。\n\n` +
   `- 源地址（添加到 FnDepot/AppCenter 第三方源）：\`https://github.com/${REPO}\` 或 \`https://raw.githubusercontent.com/${REPO}/main/fnpack.json\`\n` +
-  `- 跟随：1Panel 面板 v2 + \`apps.allowlist.txt\` 名单中的应用市场应用\n` +
-  `- 同步频率：每天一次（可手动触发），有新版本时自动打包 FPK 并发布 Release。\n\n## 应用列表\n\n| 应用 | 描述 | 上游版本 |\n|------|------|----------|\n${rows.join('\n')}\n`);
+  `- 跟随：1Panel 面板 v2、DSH（DeepSeek Harness，amd64/arm64 双架构） + \`apps.allowlist.txt\` 名单中的应用市场应用\n` +
+  `- 同步频率：每天一次（可手动触发），有新版本时自动打包 FPK 并发布 Release；同一应用只保留最新版 Release。\n\n## 应用列表\n\n| 应用 | 描述 | 上游版本 |\n|------|------|----------|\n${rows.join('\n')}\n`);
 console.log('index updated, apps:', Object.keys(fnpack.apps).join(', '));

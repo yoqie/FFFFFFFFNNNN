@@ -1,6 +1,6 @@
 {
-  "name": "1Panel 跟随源",
+  "name": "FnDepot 跟随源",
   "author": "FnDepot",
   "homepage": "https://github.com/yoqie/FnDepot",
-  "description": "跟随 1Panel 官方应用源自动打包更新的飞牛 fnOS 第三方应用源（Docker 型 FPK）。"
+  "description": "跟随上游官方源自动打包更新的飞牛 fnOS 第三方应用源（原生 FPK）：1Panel 面板 v2、DSH（DeepSeek Harness，amd64/arm64 双架构）等。"
 }
