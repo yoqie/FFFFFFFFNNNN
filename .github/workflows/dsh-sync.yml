@@ -48,6 +48,13 @@ jobs:
           MIRROR_ARGS=""
           if [ "${{ github.event.inputs.mirror }}" = "all" ]; then MIRROR_ARGS="--all"; fi
           node scripts/mirror-dsh.mjs $MIRROR_ARGS
+          # 镜像成功后删掉本源里的旧版 Release（只保留最新版），并清理索引里指向它们的
+          # 下载条目。--all 是回填历史版本，那种情况不能清理，否则刚回填的又被删掉。
+          if [ -z "$MIRROR_ARGS" ]; then
+            node scripts/prune-releases.mjs --slug dsh
+          else
+            echo "mirror=all（回填模式），跳过旧版本清理"
+          fi
           node scripts/update-index.mjs
 
       - name: 提交并推送

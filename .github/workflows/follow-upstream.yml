@@ -143,7 +143,7 @@ jobs:
         with:
           name: sync-state
           path: .
-      - name: Finalize details + commit + release
+      - name: Finalize details + 发布新版 + 清理旧 Release + 提交
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -159,15 +159,19 @@ jobs:
               *) node scripts/finalize.mjs --repo ${{ github.repository }} --tag "$TAG" --dist dist ;;
             esac
             node scripts/update-index.mjs --repo ${{ github.repository }} || true
-            git add fnpack.json apps/ assets/ build/ shared/ scripts/ README.md LICENSE
-            git commit -m "chore: follow ${NAME} ${VER}" || true
-            git push
-            # 只发 .fpk（不要把 fpk-info.json 也当资产传上去）；tag 已存在时改为覆盖上传，
-            # 避免“Release 建了但索引没提交”的情况下卡死重试。
+            # 先把新版本发出去，成功了再删旧版本：顺序反过来的话，一旦发布失败旧版本已经没了，
+            # 用户会一个能装的包都不剩。只发 .fpk（不要把 fpk-info.json 也当资产传上去）；
+            # tag 已存在时改为覆盖上传，避免“Release 建了但索引没提交”的情况下卡死重试。
             gh release create "$TAG" dist/${slug}*.fpk \
               --title "$NAME $VER" \
               --notes "自动跟随官方源打包更新：$NAME $VER。由本源 GitHub Actions 生成。" \
               || gh release upload "$TAG" dist/${slug}*.fpk --clobber
+            # 同一应用只保留最新版 Release（--keep-tag 双保险，绝不删掉刚发的这个），
+            # 同时清理 apps/<slug>.json 里指向已删除 Release 的下载条目。
+            node scripts/prune-releases.mjs --slug "$slug" --keep-tag "$TAG"
+            git add fnpack.json apps/ assets/ build/ shared/ scripts/ README.md LICENSE
+            git commit -m "chore: follow ${NAME} ${VER}" || true
+            git push
           done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

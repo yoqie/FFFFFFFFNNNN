@@ -1,35 +1,19 @@
 {
   "app_name": "1panel",
   "releases": {
-    "2.2.5-1": {
-      "changelog": "跟随 1Panel 官方 v1 LTS 2.2.5 自动打包（原生双架构）。",
-      "updated_at": "2026-09-03T12:25:44.745Z",
-      "packages": {
-        "x86": {
-          "download_url": "https://github.com/yoqie/FnDepot/releases/download/1panel-2.2.5-1/1panel_2.2.5-1_x86.fpk",
-          "sha256": "7d9325a997a0485f8033e2d57164ecc7d2733fa4511837c738619ebc1bd5c241",
-          "size": 61092843
-        },
-        "arm": {
-          "download_url": "https://github.com/yoqie/FnDepot/releases/download/1panel-2.2.5-1/1panel_2.2.5-1_arm.fpk",
-          "sha256": "122fa4293112793f10e8143c2a42aac16a085c88b43e711b089cd46c2f694f6f",
-          "size": 56971019
-        }
-      }
-    },
-    "2.3.2-1": {
+    "2.3.2-2": {
       "changelog": "跟随 1Panel 官方 v1 LTS 2.3.2 自动打包（原生双架构）。",
-      "updated_at": "2026-10-15T09:44:47.451Z",
+      "updated_at": "2026-10-15T11:35:28.856Z",
       "packages": {
         "x86": {
-          "download_url": "https://github.com/yoqie/FnDepot/releases/download/1panel-2.3.2-1/1panel_2.3.2-1_x86.fpk",
-          "sha256": "c80b6a8041c9150611acdd28103f4bdc2df58d6ac1fe4d7015b73394f1df8883",
-          "size": 64184314
+          "download_url": "https://github.com/yoqie/FnDepot/releases/download/1panel-2.3.2-2/1panel_2.3.2-2_x86.fpk",
+          "sha256": "9d3769c63e106cce608737d44cacc58605b778c73e3a9bfffee99e511f9adc97",
+          "size": 64185487
         },
         "arm": {
-          "download_url": "https://github.com/yoqie/FnDepot/releases/download/1panel-2.3.2-1/1panel_2.3.2-1_arm.fpk",
-          "sha256": "bc6411e03cb6a8fdba900e88f4a24ba0aefbcc0740d304106adfdfc7c9f0a7c3",
-          "size": 59731989
+          "download_url": "https://github.com/yoqie/FnDepot/releases/download/1panel-2.3.2-2/1panel_2.3.2-2_arm.fpk",
+          "sha256": "b9e79c332d6adcaba1382078aa7c5f7b1874fc9a53b8f7948be084523b4883fe",
+          "size": 59732363
         }
       }
     },
