@@ -89,6 +89,13 @@ for pair in "x86:x86" "arm:arm"; do
   cp -a "$SHARED/." "$local_pkg/cmd/"
   [ -f "$local_pkg/cmd/service-setup" ] || cp -a "$FNOS/cmd/service-setup" "$local_pkg/cmd/"
   chmod +x "$local_pkg/cmd/main" "$local_pkg/cmd/installer" "$local_pkg"/cmd/*_init "$local_pkg"/cmd/*_callback 2>/dev/null || true
+  # 面板版本号必须写死成上游版本（v2.3.2）：1panel-core 启动时 grep 这一行，用来显示
+  # 右下角版本号并判断是否需要升级。靠运行时 TRIM_APPVER 只是兜底，这里以本次实际
+  # 下载的 upstream 为权威，避免出现 "unknown" 或 "2.3.2-1"（后者比较时仍小于 2.3.2，
+  # 会一直提示可升级）。
+  sed -i "s#^ORIGINAL_VERSION=.*#ORIGINAL_VERSION=v${UPSTREAM}#" "$local_pkg/cmd/service-setup"
+  grep -qx "ORIGINAL_VERSION=v${UPSTREAM}" "$local_pkg/cmd/service-setup" || {
+    echo "failed to stamp ORIGINAL_VERSION=v${UPSTREAM} into service-setup" >&2; exit 1; }
   # manifest：版本/平台/checksum
   sed -i "s/^version.*/version         = ${VERSION}/" "$local_pkg/manifest"
   if grep -q '^platform' "$local_pkg/manifest"; then

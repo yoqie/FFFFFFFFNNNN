@@ -55,6 +55,20 @@ url=http://<NAS-IP>:18090/$entrance
 CREDS
     fi
 
+    # 面板版本号：1panel-core 启动时 grep 这个键（core/init/viper/viper.go），它决定右下角
+    # 角标显示什么，以及能否和官方最新版比对（core/app/service/upgrade.go）。必须是上游版本
+    # （如 v2.3.2）：
+    #  - fnOS 注入的变量叫 TRIM_APPVER，**没有** TRIM_APPVERSION；原先的
+    #    ${TRIM_APPVERSION:-unknown} 永远写成 "unknown" → 角标显示“社区版 unknown”，
+    #    且与官方版本比较永远不相等 → 一直提示可升级；
+    #  - 本源版本号带 "-N" 打包序号（2.3.2-1），必须去掉，否则 2.3.2-1 在版本比较里
+    #    仍小于 2.3.2，照样提示升级。
+    # build-1panel.sh 打包时会用本次实际下载的上游版本覆盖下面这行，作为权威值。
+    local panel_version="unknown"
+    if [ -n "${TRIM_APPVER:-}" ]; then
+        panel_version="v${TRIM_APPVER%%-*}"
+    fi
+
     if ! mkdir -p /usr/local/bin 2>/dev/null || ! : > /usr/local/bin/1pctl 2>/dev/null; then
         echo "ERROR: cannot write /usr/local/bin/1pctl (running as $(id -un), needs root)." >&2
         echo "       1panel will panic on start with: error \`BASE_DIR\` find in /usr/local/bin/1pctl" >&2
@@ -68,7 +82,7 @@ CREDS
 # Managed by fnos-apps; change settings via the 1panel UI — do not edit here.
 BASE_DIR=${TRIM_PKGVAR}
 ORIGINAL_PORT=18090
-ORIGINAL_VERSION=${TRIM_APPVERSION:-unknown}
+ORIGINAL_VERSION=${panel_version}
 ORIGINAL_ENTRANCE=$entrance
 ORIGINAL_USERNAME=$username
 ORIGINAL_PASSWORD=$password
