@@ -13,71 +13,6 @@
   "is_docker": false,
   "service_port": "3080",
   "releases": {
-    "0.2.0-rc.1": {
-      "version": "0.2.0-rc.1",
-      "release_note": "DSH v0.2.0-rc.1 飞牛 fnOS 自动构建（arm），更新内容见上游 deepseek-ai/deepseek-harness。",
-      "updated_at": "2026-09-28T13:32:34Z",
-      "packages": {
-        "arm": {
-          "version": "0.2.0-rc.1",
-          "download_url": "https://github.com/cliii-one/DSH_FNOS/releases/download/v0.2.0-rc.1/DSH_v0.2.0-rc.1_all.fpk",
-          "sha256": "1d4cf52c7def23f09248ee3808fbb47b3fed6293b75faa62cb13ddceeb280dc6",
-          "size": 132280139
-        }
-      }
-    },
-    "0.2.0-rc.2": {
-      "version": "0.2.0-rc.2",
-      "release_note": "DSH v0.2.0-rc.2 飞牛 fnOS 自动构建（arm），更新内容见上游 deepseek-ai/deepseek-harness。",
-      "updated_at": "2026-09-29T13:20:51Z",
-      "packages": {
-        "arm": {
-          "version": "0.2.0-rc.2",
-          "download_url": "https://github.com/cliii-one/DSH_FNOS/releases/download/v0.2.0-rc.2/DSH_v0.2.0-rc.2_all.fpk",
-          "sha256": "7e7c2073c66a4447f35640c38f2143542af3a254193679c2fff3eb084d0e9c19",
-          "size": 130297912
-        }
-      }
-    },
-    "0.2.1-alpha.1": {
-      "version": "0.2.1-alpha.1",
-      "release_note": "DSH v0.2.1-alpha.1 飞牛 fnOS 自动构建（arm），更新内容见上游 deepseek-ai/deepseek-harness。",
-      "updated_at": "2026-10-03T22:49:55Z",
-      "packages": {
-        "arm": {
-          "version": "0.2.1-alpha.1",
-          "download_url": "https://github.com/cliii-one/DSH_FNOS/releases/download/v0.2.1-alpha.1/DSH_v0.2.1-alpha.1_all.fpk",
-          "sha256": "67bade64d5b77ba4e66bdfe4f8e0011b3d0f75514aada356f9787bb0692f7e21",
-          "size": 135509163
-        }
-      }
-    },
-    "0.2.1-alpha.2": {
-      "version": "0.2.1-alpha.2",
-      "release_note": "DSH v0.2.1-alpha.2 飞牛 fnOS 自动构建（arm），更新内容见上游 deepseek-ai/deepseek-harness。",
-      "updated_at": "2026-10-09T23:57:27Z",
-      "packages": {
-        "arm": {
-          "version": "0.2.1-alpha.2",
-          "download_url": "https://github.com/cliii-one/DSH_FNOS/releases/download/v0.2.1-alpha.2/DSH_v0.2.1-alpha.2_all.fpk",
-          "sha256": "01fa4b119e708b31167f77b50e9184154754efe110efb97b2c394047e6169d93",
-          "size": 136495880
-        }
-      }
-    },
-    "0.2.1-alpha.3": {
-      "version": "0.2.1-alpha.3",
-      "release_note": "DSH v0.2.1-alpha.3 飞牛 fnOS 自动构建（arm），更新内容见上游 deepseek-ai/deepseek-harness。",
-      "updated_at": "2026-10-14T23:05:53Z",
-      "packages": {
-        "arm": {
-          "version": "0.2.1-alpha.3",
-          "download_url": "https://github.com/cliii-one/DSH_FNOS/releases/download/v0.2.1-alpha.3/DSH_v0.2.1-alpha.3_all.fpk",
-          "sha256": "6df804b4d8cdfee4923c1769e81a03dc9e4271fab51f8828c2310a291c5438fd",
-          "size": 169106025
-        }
-      }
-    },
     "0.2.1-alpha.4": {
       "version": "0.2.1-alpha.4",
       "release_note": "DSH v0.2.1-alpha.4 飞牛 fnOS 自动构建（arm/x86），更新内容见上游 deepseek-ai/deepseek-harness。",
@@ -98,5 +33,5 @@
       }
     }
   },
-  "updated_at": "2026-10-15T14:06:19.237Z"
+  "updated_at": "2026-10-15T14:19:39.171Z"
 }
