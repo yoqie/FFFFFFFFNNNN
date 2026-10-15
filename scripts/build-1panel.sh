@@ -18,6 +18,9 @@ VERSION=$(node -e "console.log(require('$ROOT/build/1panel/meta.json').version)"
 [ -n "$UPSTREAM" ] && [ -n "$VERSION" ] || { echo "cannot read version from meta.json" >&2; exit 1; }
 
 mkdir -p "$OUTDIR"
+# 必须在打包前把输出目录转成绝对路径：打包时是在 (cd "$local_pkg" && tar …) 子 shell 里
+# 执行，相对的 $OUTDIR 会解析到临时包目录下，导致 tar 报 "Cannot open: No such file"。
+OUTDIR="$(cd "$OUTDIR" && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 

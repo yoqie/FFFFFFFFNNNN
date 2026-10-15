@@ -38,6 +38,8 @@ fi
 grep -q '^platform' "$PKG/manifest" || echo "platform        = all" >> "$PKG/manifest"
 
 mkdir -p "$OUTDIR"
+# 同 build-1panel.sh：打包在 (cd "$PKG" && tar …) 子 shell 里执行，$OUTDIR 必须是绝对路径
+OUTDIR="$(cd "$OUTDIR" && pwd)"
 FPK="$OUTDIR/${APPNAME}_${VERSION}_all.fpk"
 (cd "$PKG" && tar -czf "$FPK" .)
 

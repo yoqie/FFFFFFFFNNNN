@@ -61,6 +61,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      # 关键：sync 任务的产物（pending.json / build/1panel/meta.json / apps/ …）
+      # 只存在于 sync-state 工件里，构建任务必须先恢复，否则 pending.json 缺失、
+      # 版本号也是 checkout 里的旧值。
+      - name: 恢复 sync 产物
+        uses: actions/download-artifact@v4
+        with:
+          name: sync-state
+          path: .
       - name: Build FPKs (x86)
         run: |
           chmod +x scripts/build-1panel.sh scripts/build-fpk.sh
@@ -71,6 +79,9 @@ jobs:
               *) ./scripts/build-fpk.sh "$slug" dist || true ;;
             esac
           done
+          # build-1panel.sh 会同时产出双架构，这里只保留 x86，arm 由 build-arm 提供，
+          # 避免两个工件同名互相覆盖
+          rm -f dist/1panel_*_arm.fpk dist/1panel-arm.fpk-info.json
           ls -la dist/
 
       - uses: actions/upload-artifact@v4
@@ -87,6 +98,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: 恢复 sync 产物
+        uses: actions/download-artifact@v4
+        with:
+          name: sync-state
+          path: .
       - name: Build FPKs (arm)
         run: |
           chmod +x scripts/build-1panel.sh scripts/build-fpk.sh
@@ -96,7 +112,9 @@ jobs:
               1panel)
                 # 1panel arm tarball is downloaded upstream; the script builds both arches,
                 # so only keep the arm outputs here to avoid clobbering x86 artifacts.
-                ./scripts/build-1panel.sh dist-arm ;;
+                ./scripts/build-1panel.sh dist-arm
+                rm -f dist-arm/1panel_*_x86.fpk dist-arm/1panel-x86.fpk-info.json
+                ;;
               *) echo "skip docker $slug on arm runner (built on x86)" ;;
             esac
           done
@@ -124,28 +142,32 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: sync-state
-          path: state/
+          path: .
       - name: Finalize details + commit + release
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          cp state/pending.json pending.json 2>/dev/null || true
-          cp state/fnpack.json fnpack.json 2>/dev/null || true
           for slug in $(node -e "console.log(require('./pending.json').map(e=>e.slug).join(' '))"); do
             VER=$(node -e "console.log(require('./pending.json').find(e=>e.slug==='$slug').version)")
             NAME=$(node -e "const m=require('./build/$slug/meta.json');console.log(m.displayName||'$slug')")
-            TAG="${NAME}-${VER}"
+            # tag 用 slug（与历史 tag `1panel-2.2.5-1` 一致），标题用 displayName
+            TAG="${slug}-${VER}"
+            # finalize 失败必须让任务失败：否则新 meta 会被提交、但 apps/<slug>.json 里没有
+            # 这次发布，而下次 sync 因为指纹已变不再产生 pending，索引就永远缺这一版。
             case "$slug" in
-              1panel) node scripts/finalize-1panel.mjs --repo ${{ github.repository }} --tag "$TAG" --dist dist || true ;;
-              *) node scripts/finalize.mjs --repo ${{ github.repository }} --tag "$TAG" --dist dist || true ;;
+              1panel) node scripts/finalize-1panel.mjs --repo ${{ github.repository }} --tag "$TAG" --dist dist ;;
+              *) node scripts/finalize.mjs --repo ${{ github.repository }} --tag "$TAG" --dist dist ;;
             esac
             node scripts/update-index.mjs --repo ${{ github.repository }} || true
             git add fnpack.json apps/ assets/ build/ shared/ scripts/ README.md LICENSE
             git commit -m "chore: follow ${NAME} ${VER}" || true
             git push
-            gh release create "$TAG" dist/${slug}* \
+            # 只发 .fpk（不要把 fpk-info.json 也当资产传上去）；tag 已存在时改为覆盖上传，
+            # 避免“Release 建了但索引没提交”的情况下卡死重试。
+            gh release create "$TAG" dist/${slug}*.fpk \
               --title "$NAME $VER" \
-              --notes "自动跟随官方源打包更新：$NAME $VER。由本源 GitHub Actions 生成。"
+              --notes "自动跟随官方源打包更新：$NAME $VER。由本源 GitHub Actions 生成。" \
+              || gh release upload "$TAG" dist/${slug}*.fpk --clobber
           done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
