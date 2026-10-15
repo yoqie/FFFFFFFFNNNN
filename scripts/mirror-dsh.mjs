@@ -175,6 +175,18 @@ for (const version of targets) {
       }
 
       const existing = (release.assets || []).find((a) => a.name === file);
+      // 本源已有同一资产（GitHub 计算的 sha256 与索引一致，或大小一致且索引无 sha）时
+      // 无需重复下载几百 MB，直接改写下载地址即可
+      const assetSha = existing && existing.digest ? existing.digest.replace(/^sha256:/, '') : null;
+      const sameDigest = !!(assetSha && pkg.sha256 && assetSha === pkg.sha256);
+      const sameSize = !!(existing && typeof pkg.size === 'number' && existing.size === pkg.size);
+      if (existing && !FORCE && (sameDigest || (sameSize && !pkg.sha256))) {
+        pkg.download_url = `${ownPrefix(tag)}${file}`;
+        changed += 1;
+        console.log(`${tag} ${arch}: 本源已有同一资产（${mb(existing.size)}），仅改写下载地址`);
+        continue;
+      }
+
       const dest = path.join(tmpRoot, file);
       console.log(`${tag} ${arch}: 下载 ${file} …`);
       const { sha256, size } = await download(pkg.download_url, dest);
@@ -182,17 +194,13 @@ for (const version of targets) {
         throw new Error(`sha256 校验失败 ${file}: 索引 ${pkg.sha256} ≠ 实际 ${sha256}`);
       }
 
-      if (existing && existing.size === size && !FORCE) {
-        console.log(`${tag} ${arch}: 资产已存在且大小一致（${mb(size)}），跳过上传`);
-      } else {
-        if (existing) {
-          await api('DELETE', `/repos/${REPO}/releases/assets/${existing.id}`);
-          console.log(`${tag} ${arch}: 已删除旧资产 ${file}`);
-        }
-        process.stdout.write(`${tag} ${arch}: 上传 ${file}（${mb(size)}）… `);
-        uploadAsset(release.id, dest, file);
-        process.stdout.write('完成\n');
+      if (existing) {
+        await api('DELETE', `/repos/${REPO}/releases/assets/${existing.id}`);
+        console.log(`${tag} ${arch}: 已删除旧资产 ${file}`);
       }
+      process.stdout.write(`${tag} ${arch}: 上传 ${file}（${mb(size)}）… `);
+      uploadAsset(release.id, dest, file);
+      process.stdout.write('完成\n');
       await fs.rm(dest, { force: true });
 
       pkg.download_url = `${ownPrefix(tag)}${file}`;
