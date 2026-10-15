@@ -28,77 +28,53 @@
     },
     "0.2.0-rc.2": {
       "version": "0.2.0-rc.2",
-      "release_note": "DSH v0.2.0-rc.2 飞牛 fnOS 自动构建（arm/x86），更新内容见上游 deepseek-ai/deepseek-harness。",
-      "updated_at": "2026-09-30T07:59:55Z",
+      "release_note": "DSH v0.2.0-rc.2 飞牛 fnOS 自动构建（arm），更新内容见上游 deepseek-ai/deepseek-harness。",
+      "updated_at": "2026-09-29T13:20:51Z",
       "packages": {
-        "x86": {
-          "version": "0.2.0-rc.2",
-          "download_url": "https://github.com/yoqie/DSH_FNOS/releases/download/v0.2.0-rc.2/DSH_v0.2.0-rc.2_amd64.fpk",
-          "sha256": "73ce5dda59e0ab8d5d36777b08f577fc1c6c6c8c41452d09bb90f383a5afc8e0",
-          "size": 127324208
-        },
         "arm": {
           "version": "0.2.0-rc.2",
-          "download_url": "https://github.com/yoqie/DSH_FNOS/releases/download/v0.2.0-rc.2/DSH_v0.2.0-rc.2_arm64.fpk",
-          "sha256": "b995ab85f8b0ddabb599878fc69f25aff02cac164d9862cd3c4a34f8b1d1f2a0",
-          "size": 130295294
+          "download_url": "https://github.com/cliii-one/DSH_FNOS/releases/download/v0.2.0-rc.2/DSH_v0.2.0-rc.2_all.fpk",
+          "sha256": "7e7c2073c66a4447f35640c38f2143542af3a254193679c2fff3eb084d0e9c19",
+          "size": 130297912
         }
       }
     },
     "0.2.1-alpha.1": {
       "version": "0.2.1-alpha.1",
-      "release_note": "DSH v0.2.1-alpha.1 飞牛 fnOS 自动构建（arm/x86），更新内容见上游 deepseek-ai/deepseek-harness。",
-      "updated_at": "2026-10-03T22:42:14Z",
+      "release_note": "DSH v0.2.1-alpha.1 飞牛 fnOS 自动构建（arm），更新内容见上游 deepseek-ai/deepseek-harness。",
+      "updated_at": "2026-10-03T22:49:55Z",
       "packages": {
-        "x86": {
-          "version": "0.2.1-alpha.1",
-          "download_url": "https://github.com/yoqie/DSH_FNOS/releases/download/v0.2.1-alpha.1/DSH_v0.2.1-alpha.1_amd64.fpk",
-          "sha256": "b988b31fd588502d10644ed542d2389450b8b02c8cce57871af5d89ae0fd9b06",
-          "size": 132531232
-        },
         "arm": {
           "version": "0.2.1-alpha.1",
-          "download_url": "https://github.com/yoqie/DSH_FNOS/releases/download/v0.2.1-alpha.1/DSH_v0.2.1-alpha.1_arm64.fpk",
-          "sha256": "cf37872ff93ba4e0d4bb04b2844ab0e3df92165a40906295bfee091103c01b8a",
-          "size": 135487184
+          "download_url": "https://github.com/cliii-one/DSH_FNOS/releases/download/v0.2.1-alpha.1/DSH_v0.2.1-alpha.1_all.fpk",
+          "sha256": "67bade64d5b77ba4e66bdfe4f8e0011b3d0f75514aada356f9787bb0692f7e21",
+          "size": 135509163
         }
       }
     },
     "0.2.1-alpha.2": {
       "version": "0.2.1-alpha.2",
-      "release_note": "DSH v0.2.1-alpha.2 飞牛 fnOS 自动构建（arm/x86），更新内容见上游 deepseek-ai/deepseek-harness。",
-      "updated_at": "2026-10-09T23:52:04Z",
+      "release_note": "DSH v0.2.1-alpha.2 飞牛 fnOS 自动构建（arm），更新内容见上游 deepseek-ai/deepseek-harness。",
+      "updated_at": "2026-10-09T23:57:27Z",
       "packages": {
-        "x86": {
-          "version": "0.2.1-alpha.2",
-          "download_url": "https://github.com/yoqie/DSH_FNOS/releases/download/v0.2.1-alpha.2/DSH_v0.2.1-alpha.2_amd64.fpk",
-          "sha256": "dc8503353f413c15162c051ef942dc990ee15e7f92ceb51ac07d2a6dea45e76c",
-          "size": 133504986
-        },
         "arm": {
           "version": "0.2.1-alpha.2",
-          "download_url": "https://github.com/yoqie/DSH_FNOS/releases/download/v0.2.1-alpha.2/DSH_v0.2.1-alpha.2_arm64.fpk",
-          "sha256": "65d981d2ee89c1d77881aa4a92752347fa931dba4107a5070eeefb4acacb02b6",
-          "size": 136487881
+          "download_url": "https://github.com/cliii-one/DSH_FNOS/releases/download/v0.2.1-alpha.2/DSH_v0.2.1-alpha.2_all.fpk",
+          "sha256": "01fa4b119e708b31167f77b50e9184154754efe110efb97b2c394047e6169d93",
+          "size": 136495880
         }
       }
     },
     "0.2.1-alpha.3": {
       "version": "0.2.1-alpha.3",
-      "release_note": "DSH v0.2.1-alpha.3 飞牛 fnOS 自动构建（arm/x86），更新内容见上游 deepseek-ai/deepseek-harness。",
-      "updated_at": "2026-10-14T23:01:20Z",
+      "release_note": "DSH v0.2.1-alpha.3 飞牛 fnOS 自动构建（arm），更新内容见上游 deepseek-ai/deepseek-harness。",
+      "updated_at": "2026-10-14T23:05:53Z",
       "packages": {
-        "x86": {
-          "version": "0.2.1-alpha.3",
-          "download_url": "https://github.com/yoqie/DSH_FNOS/releases/download/v0.2.1-alpha.3/DSH_v0.2.1-alpha.3_amd64.fpk",
-          "sha256": "acf49484dd90f636aa7af061962f0cbed9e094051efac024b0c81c4084e77cc0",
-          "size": 166169022
-        },
         "arm": {
           "version": "0.2.1-alpha.3",
-          "download_url": "https://github.com/yoqie/DSH_FNOS/releases/download/v0.2.1-alpha.3/DSH_v0.2.1-alpha.3_arm64.fpk",
-          "sha256": "3e595c2f256cad6f21ad21d24fbcccdb7fa97738ff7e317e7463c2b6506dc3e2",
-          "size": 169125485
+          "download_url": "https://github.com/cliii-one/DSH_FNOS/releases/download/v0.2.1-alpha.3/DSH_v0.2.1-alpha.3_all.fpk",
+          "sha256": "6df804b4d8cdfee4923c1769e81a03dc9e4271fab51f8828c2310a291c5438fd",
+          "size": 169106025
         }
       }
     },
@@ -122,5 +98,5 @@
       }
     }
   },
-  "updated_at": "2026-10-15T13:45:36.653Z"
+  "updated_at": "2026-10-15T14:06:19.237Z"
 }
