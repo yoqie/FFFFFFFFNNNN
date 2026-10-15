@@ -122,7 +122,7 @@ const detail = await readJson(detailPath, {
   run_as: 'root',
   install_type: 'root',
   is_docker: false,
-  service_port: '3082',
+  service_port: '3080',
   releases: {},
 });
 
