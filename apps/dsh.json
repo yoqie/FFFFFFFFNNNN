@@ -15,23 +15,17 @@
   "releases": {
     "0.2.1-alpha.4": {
       "version": "0.2.1-alpha.4",
-      "release_note": "DSH v0.2.1-alpha.4 飞牛 fnOS 自动构建（arm/x86），更新内容见上游 deepseek-ai/deepseek-harness。",
-      "updated_at": "2026-10-15T13:22:51Z",
+      "release_note": "DSH v0.2.1-alpha.4 飞牛 fnOS 自动构建（arm），更新内容见上游 deepseek-ai/deepseek-harness。",
+      "updated_at": "2026-10-15T23:00:41Z",
       "packages": {
-        "x86": {
-          "version": "0.2.1-alpha.4",
-          "download_url": "https://github.com/yoqie/FnDepot/releases/download/dsh-0.2.1-alpha.4/DSH_v0.2.1-alpha.4_amd64.fpk",
-          "sha256": "a52bf824ac4374508eb09fa7e45ef30ec220240f476a86e32b1c35443b747cc7",
-          "size": 166214445
-        },
         "arm": {
           "version": "0.2.1-alpha.4",
-          "download_url": "https://github.com/yoqie/FnDepot/releases/download/dsh-0.2.1-alpha.4/DSH_v0.2.1-alpha.4_arm64.fpk",
-          "sha256": "47b09fd701750461b18e15a2f34968a8872d345e1461cc364a9b1edbebc68df0",
-          "size": 169197254
+          "download_url": "https://github.com/yoqie/FnDepot/releases/download/dsh-0.2.1-alpha.4/DSH_v0.2.1-alpha.4_all.fpk",
+          "sha256": "9b4887bbc58f5ff759c4ffee2363682d38b8741e37bc0fecce32d339d990c85a",
+          "size": 169192508
         }
       }
     }
   },
-  "updated_at": "2026-10-15T23:34:08.102Z"
+  "updated_at": "2026-10-16T04:16:48.316Z"
 }
