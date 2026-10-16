@@ -102,7 +102,7 @@ console.log('已写入 build/dsh/meta.json');
 // ---------- 5. 应用素材说明（图标已在步骤 0 复制）----------
 await fs.writeFile(
   path.join(ROOT, 'assets', 'dsh', 'README.md'),
-  `# DSH（DeepSeek Harness 飞牛版）\n\n- 上游与打包: https://github.com/cliii-one/DSH_FNOS\n- 构建方式: GitHub Actions（amd64 + arm64 原生双架构），上游发布 Release\n- 分发: 本源把最新版 fpk 镜像到本仓库 Release（tag: \`dsh-<版本>\`），索引里的下载地址指向本源，不再依赖上游仓库\n- 服务端口: 3082（官方 deepseek-harness 用 3080，两者可共存）\n- 依赖: 飞牛应用中心 nodejs_v24 运行时（缺失时自动安装）\n- 数据目录: /vol2/@appshare/dsh\n\n安装后桌面出现 DSH 卡片，点击或访问 http://NAS地址:3082 使用。\n`,
+  `# DSH（DeepSeek Harness 飞牛版）\n\n- 上游与打包: https://github.com/cliii-one/DSH_FNOS\n- 构建方式: GitHub Actions（amd64 + arm64 原生双架构），上游发布 Release\n- 分发: 本源把最新版 fpk 镜像到本仓库 Release（tag: \`dsh-<版本>\`），索引里的下载地址指向本源，不再依赖上游仓库\n- 服务端口: 3082（官方 deepseek-harness 用 3080，两者可共存）\n- 依赖: 飞牛应用中心 nodejs_v24 运行时（缺失时自动安装）\n- 数据目录: /vol2/@appshare/dsh\n- 卸载数据: 默认保留；卸载向导可选「只删会话与凭据（.dsh）」或「删除全部应用数据（含 Documents 工作区）」\n\n安装后桌面出现 DSH 卡片，点击或访问 http://NAS地址:3082 使用。\n`,
 );
 console.log('已写入 assets/dsh/（图标沿用原资产）');
 
