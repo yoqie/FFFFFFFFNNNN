@@ -70,23 +70,43 @@ async function api(method, endpoint, body) {
   return text ? JSON.parse(text) : null;
 }
 
-// 与 sync-dsh.mjs 保持一致：0.2.0 正式版 > 0.2.0-rc.1 先行版
+// 与 sync-dsh.mjs 保持一致（semver 语义）：
+//   0.2.0 正式版 > 0.2.0-rc.1 先行版；先行版段数多者更大
+//   （0.2.1-alpha.4.1 > 0.2.1-alpha.4 且 < 0.2.1-alpha.5）。
 function versionCompare(a, b) {
-  const parse = (v) => String(v).replace(/^v/, '').split(/[.\-+]/);
+  const split = (v) => {
+    const s = String(v).replace(/^v/, '');
+    const dash = s.indexOf('-');
+    return {
+      core: (dash === -1 ? s : s.slice(0, dash)).split('.'),
+      pre: dash === -1 ? null : s.slice(dash + 1).split('.'),
+    };
+  };
   const num = (x) => (/^\d+$/.test(x) ? Number(x) : x);
-  const pa = parse(a);
-  const pb = parse(b);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
-    if (pa[i] === undefined) return 1;
-    if (pb[i] === undefined) return -1;
-    const x = num(pa[i]);
-    const y = num(pb[i]);
-    if (x === y) continue;
-    const xn = typeof x === 'number';
-    const yn = typeof y === 'number';
-    if (xn && yn) return x < y ? -1 : 1;
+  const cmpSeg = (x, y) => {
+    const x1 = num(x);
+    const y1 = num(y);
+    if (x1 === y1) return 0;
+    const xn = typeof x1 === 'number';
+    const yn = typeof y1 === 'number';
+    if (xn && yn) return x1 < y1 ? -1 : 1;
     if (xn !== yn) return xn ? 1 : -1;
-    return x < y ? -1 : 1;
+    return x1 < y1 ? -1 : 1;
+  };
+  const A = split(a);
+  const B = split(b);
+  for (let i = 0; i < Math.max(A.core.length, B.core.length); i += 1) {
+    const c = cmpSeg(A.core[i] ?? '0', B.core[i] ?? '0');
+    if (c) return c;
+  }
+  if (A.pre === null && B.pre === null) return 0;
+  if (A.pre === null) return 1;
+  if (B.pre === null) return -1;
+  for (let i = 0; i < Math.max(A.pre.length, B.pre.length); i += 1) {
+    if (A.pre[i] === undefined) return -1;
+    if (B.pre[i] === undefined) return 1;
+    const c = cmpSeg(A.pre[i], B.pre[i]);
+    if (c) return c;
   }
   return 0;
 }

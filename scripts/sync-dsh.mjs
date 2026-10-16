@@ -49,22 +49,44 @@ async function ghJson(url) {
 // 资产后缀 → FnDepot 包架构键。all 为旧工作流的历史产物（arm64 运行器单架构构建）
 const ARCH_MAP = { amd64: 'x86', x64: 'x86', arm64: 'arm', aarch64: 'arm', all: 'arm' };
 
+// 版本比较（semver 语义）：
+//   主版本段逐段比较；无先行版 > 有先行版（0.2.0 > 0.2.0-rc.1）；
+//   两个先行版之间逐段比较，段数多者更大（0.2.1-alpha.4.1 > 0.2.1-alpha.4），
+//   同时仍低于下一个上游段（0.2.1-alpha.4.1 < 0.2.1-alpha.5）。
 function versionCompare(a, b) {
-  const parse = (v) => String(v).replace(/^v/, '').split(/[.\-+]/);
+  const split = (v) => {
+    const s = String(v).replace(/^v/, '');
+    const dash = s.indexOf('-');
+    return {
+      core: (dash === -1 ? s : s.slice(0, dash)).split('.'),
+      pre: dash === -1 ? null : s.slice(dash + 1).split('.'),
+    };
+  };
   const num = (x) => (/^\d+$/.test(x) ? Number(x) : x);
-  const pa = parse(a);
-  const pb = parse(b);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
-    if (pa[i] === undefined) return 1;  // 0.2.0 > 0.2.0-rc.1（正式版 > 先行版）
-    if (pb[i] === undefined) return -1;
-    const x = num(pa[i]);
-    const y = num(pb[i]);
-    if (x === y) continue;
-    const xn = typeof x === 'number';
-    const yn = typeof y === 'number';
-    if (xn && yn) return x < y ? -1 : 1;
-    if (xn !== yn) return xn ? 1 : -1;  // semver：数字标识符 > 字母标识符
-    return x < y ? -1 : 1;
+  const cmpSeg = (x, y) => {
+    const x1 = num(x);
+    const y1 = num(y);
+    if (x1 === y1) return 0;
+    const xn = typeof x1 === 'number';
+    const yn = typeof y1 === 'number';
+    if (xn && yn) return x1 < y1 ? -1 : 1;
+    if (xn !== yn) return xn ? 1 : -1; // 数字标识符 > 字母标识符
+    return x1 < y1 ? -1 : 1;
+  };
+  const A = split(a);
+  const B = split(b);
+  for (let i = 0; i < Math.max(A.core.length, B.core.length); i += 1) {
+    const c = cmpSeg(A.core[i] ?? '0', B.core[i] ?? '0');
+    if (c) return c;
+  }
+  if (A.pre === null && B.pre === null) return 0;
+  if (A.pre === null) return 1; // 正式版 > 先行版
+  if (B.pre === null) return -1;
+  for (let i = 0; i < Math.max(A.pre.length, B.pre.length); i += 1) {
+    if (A.pre[i] === undefined) return -1; // 先行版段数少者更小
+    if (B.pre[i] === undefined) return 1;
+    const c = cmpSeg(A.pre[i], B.pre[i]);
+    if (c) return c;
   }
   return 0;
 }
