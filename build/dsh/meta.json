@@ -9,7 +9,7 @@
   ],
   "maintainer": "cliii-one",
   "maintainer_url": "https://github.com/cliii-one/DSH_FNOS",
-  "service_port": "3080",
+  "service_port": "3082",
   "run_as": "root",
   "install_type": "root",
   "is_docker": false
