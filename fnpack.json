@@ -58,7 +58,7 @@
     },
     "Router2API": {
       "details_url": "apps/Router2API.json",
-      "details_updated_at": "2026-10-17T17:53:11.493Z",
+      "details_updated_at": "2026-10-17T20:33:32.665Z",
       "display_name": "Router2API",
       "desc": ".NET 10 模型路由宿主，把不同提供方的模型统一成 OpenAI 兼容接口，自带 Vue 3 管理后台。包内集成 .NET 自包含运行时与 Redis 运行态，安装即用，无需 Docker。",
       "platform": [
