@@ -9,7 +9,7 @@
   "apps": {
     "1panel": {
       "details_url": "apps/1panel.json",
-      "details_updated_at": "2026-10-17T11:09:42.881Z",
+      "details_updated_at": "2026-10-17T11:11:02.655Z",
       "display_name": "1Panel",
       "desc": "开源服务器运维管理面板，提供可视化的 Linux 服务器管理。",
       "platform": [
@@ -58,7 +58,7 @@
     },
     "Router2API": {
       "details_url": "apps/Router2API.json",
-      "details_updated_at": "2026-10-17T11:09:27.042Z",
+      "details_updated_at": "2026-10-17T11:11:01.603Z",
       "display_name": "Router2API",
       "desc": ".NET 10 模型路由宿主，把不同提供方的模型统一成 OpenAI 兼容接口，自带 Vue 3 管理后台。包内集成 .NET 自包含运行时与 Redis 运行态，安装即用，无需 Docker。",
       "platform": [
