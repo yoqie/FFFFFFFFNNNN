@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /**
- * migrate-dsh.mjs —— FnDepot 应用迁移（一次性）
+ * migrate-dsh.mjs —— 应用迁移（一次性，已执行完毕，仅作历史记录）
+ * 注：DSH 现已改由本源 FFFFFFFFFNNN 直接从上游 deepseek-ai/deepseek-harness 构建，
+ *     文中提到的第三方打包仓库仅反映当时状态。
  *
  * 1. 下线旧的 DeepSeek Harness（FnDepot 自建构建链路）：
  *    - apps/deepseek-harness.json

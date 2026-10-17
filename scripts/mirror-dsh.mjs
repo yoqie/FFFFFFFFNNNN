@@ -2,7 +2,8 @@
 /**
  * mirror-dsh.mjs —— 把 DSH 的 fpk 镜像到本源 Release，让 DSH 像 1panel 一样显示在 Releases
  *
- * 背景：DSH 由上游 yoqie/DSH_FNOS 构建并发布 Release，本源以前只做索引同步、不二次分发 fpk。
+ * 背景：DSH 的 fpk 现在由本源（FFFFFFFFNNN）直接从上游 deepseek-ai/deepseek-harness 构建并发布；
+ *       对第三方/其他 fork 的历史 Release 仍可镜像，索引里的下载地址统一指向本源。
  * 现在本源把 fpk 二次分发到自己的 Release（tag: dsh-<version>），
  * apps/dsh.json 里的下载地址随之指向本源，不再依赖上游仓库。
  *

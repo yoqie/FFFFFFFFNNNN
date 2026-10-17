@@ -1,7 +1,7 @@
 name: dsh-sync
 
 # DSH（DeepSeek Harness 飞牛版）同步：
-# - 每日定时检查上游 cliii-one/DSH_FNOS / yoqie/DSH_FNOS 是否有新 Release，
+# - 每日定时检查本源（FFFFFFFFNNN）自建的 dsh-<版本> Release 是否有更新，
 #   有新版本才同步索引并更新 fnpack.json / README.md
 # - 同步后把最新版 fpk 镜像到本源 Release（tag: dsh-<版本>），
 #   让 DSH 和 1panel 一样显示在本仓库 Releases，下载不再依赖上游仓库
