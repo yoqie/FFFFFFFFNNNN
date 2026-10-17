@@ -1,0 +1,60 @@
+name: router2api-sync
+
+# Router2API（.NET 10 模型路由宿主 · 飞牛原生包）同步：
+# - 每日定时检查上游 cliii-one/Router2API 是否有新 Release，
+#   有新版本才同步索引并更新 fnpack.json / README.md
+# - 同步后把最新版 fpk 镜像到本源 Release（tag: Router2API-<版本>），
+#   下载不再依赖上游仓库；索引里的作者固定写最上游 NNNNolan
+on:
+  schedule:
+    - cron: '30 21 * * *' # UTC 21:30 = 北京时间次日凌晨 5:30（与 dsh-sync 的 21:00 错开）
+  workflow_dispatch:
+    inputs:
+      mirror:
+        description: "mirror=all 时把索引里的全部历史版本都镜像到本源 Release（首次全量补档用）"
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 同步上游 Release 并镜像到本源 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          node scripts/sync-router2api.mjs
+          MIRROR_ARGS=""
+          if [ "${{ github.event.inputs.mirror }}" = "all" ]; then MIRROR_ARGS="--all"; fi
+          node scripts/mirror-router2api.mjs $MIRROR_ARGS
+          # 镜像成功后删掉本源里的旧版 Release（只保留最新版），并清理索引里指向它们的
+          # 下载条目。--all 是回填历史版本，那种情况不能清理，否则刚回填的又被删掉。
+          if [ -z "$MIRROR_ARGS" ]; then
+            node scripts/prune-releases.mjs --slug Router2API
+          else
+            echo "mirror=all（回填模式），跳过旧版本清理"
+          fi
+          node scripts/update-index.mjs
+
+      - name: 提交并推送
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "索引无变化"
+            exit 0
+          fi
+          VERSION=""
+          if [ -f build/Router2API/meta.json ]; then VERSION=$(node -p "require('./build/Router2API/meta.json').version"); fi
+          git commit -m "chore: sync Router2API ${VERSION}"
+          git push

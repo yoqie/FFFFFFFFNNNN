@@ -1,0 +1,37 @@
+{
+  "app_name": "Router2API",
+  "display_name": "Router2API",
+  "desc": ".NET 10 模型路由宿主，把不同提供方的模型统一成 OpenAI 兼容接口，自带 Vue 3 管理后台。包内集成 .NET 自包含运行时与 Redis 运行态，安装即用，无需 Docker。",
+  "categories": [
+    "AI赋能",
+    "编程开发"
+  ],
+  "maintainer": "NNNNolan",
+  "maintainer_url": "https://github.com/NNNNolan/Router2API",
+  "run_as": "root",
+  "install_type": "root",
+  "is_docker": false,
+  "service_port": "5242",
+  "releases": {
+    "2.0.8": {
+      "version": "2.0.8",
+      "release_note": "Router2API v2.0.8 飞牛 fnOS 原生包（arm/x86），由 cliii-one/Router2API 自动打包；宿主上游见 https://github.com/NNNNolan/Router2API。",
+      "updated_at": "2026-10-16T22:19:01Z",
+      "packages": {
+        "x86": {
+          "version": "2.0.8",
+          "download_url": "https://github.com/yoqie/FnDepot/releases/download/Router2API-2.0.8/Router2API_v2.0.8_amd64.fpk",
+          "sha256": "c43760c170ac9533cf75b174131a1e18f1d97057108e9fcb25d2b0b12554413e",
+          "size": 71457703
+        },
+        "arm": {
+          "version": "2.0.8",
+          "download_url": "https://github.com/yoqie/FnDepot/releases/download/Router2API-2.0.8/Router2API_v2.0.8_arm64.fpk",
+          "sha256": "5fa58742836817a7775b09f817fddd9d630a03855c718511bbce83836a3d1087",
+          "size": 68726519
+        }
+      }
+    }
+  },
+  "updated_at": "2026-10-17T11:09:27.042Z"
+}
