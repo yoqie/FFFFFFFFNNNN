@@ -39,9 +39,13 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.ver.outputs.version }}
+        upstream: ${{ steps.ver.outputs.upstream }}
       ref: ${{ steps.ver.outputs.ref }}
       skip: ${{ steps.ver.outputs.skip }}
     steps:
+        # 需要 checkout 才能调用 scripts/next-version.mjs 计算发布版本
+        - uses: actions/checkout@v4
+
       - name: 解析目标版本
         id: ver
         env:
@@ -78,19 +82,24 @@ jobs:
           [ -n "${VERSION}" ] || VERSION="${TAGVER}"
           VERSION="${VERSION#v}"
 
-          # 本源已经有这个版本（tag Router2API-<版本>）就不重复构建
+          # 发布版本：跟随上游，同时保证数字段单调递增，否则飞牛应用中心不会提示更新
+          # （它比较版本时忽略 alpha/rc 等字母段，见 scripts/next-version.mjs）
+          UPSTREAM_VERSION="${VERSION}"
+          VERSION=$(node scripts/next-version.mjs --slug Router2API --upstream-version "${UPSTREAM_VERSION}")
+
+          # 上游这个版本已经打包过（记录在 build/Router2API/meta.json）就不重复构建
           SKIP="false"
           if [ "${FORCE}" != "true" ]; then
-            CODE=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${GH_TOKEN}" \
-              "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/Router2API-${VERSION}")
-            [ "${CODE}" = "200" ] && SKIP="true"
+            PACKED=$(node -p "try{require('./build/Router2API/meta.json').version}catch(e){''}" 2>/dev/null || true)
+            [ -n "${PACKED}" ] && [ "${PACKED}" = "${UPSTREAM_VERSION}" ] && SKIP="true"
           fi
 
           echo "上游 ref：${REF}"
-          echo "目标版本：${VERSION}"
+          echo "上游版本：${UPSTREAM_VERSION} → 发布版本：${VERSION}"
           echo "需要构建：$([ "${SKIP}" = "true" ] && echo 否 || echo 是)"
           {
             echo "version=${VERSION}"
+            echo "upstream=${UPSTREAM_VERSION}"
             echo "ref=${REF}"
             echo "skip=${SKIP}"
           } >> "$GITHUB_OUTPUT"
@@ -210,11 +219,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.prepare.outputs.version }}
+          UPSTREAM: ${{ needs.prepare.outputs.upstream }}
         run: |
           set -euo pipefail
           ls -la dist
           TAG="Router2API-${VERSION}"
           NOTES="Router2API v${VERSION} 飞牛 fnOS 原生包（amd64/arm64），由本仓库从上游自动构建。
+            对应上游版本：${UPSTREAM}
           上游项目：https://github.com/NNNNolan/Router2API
           打包流程说明：见仓库 scripts/assemble-router2api.sh"
           if gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
