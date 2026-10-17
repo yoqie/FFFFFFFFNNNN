@@ -210,8 +210,17 @@ detail.releases = sortedReleases;
 if (dropped.length) {
   console.log(`索引只保留最新 ${kept.length} 个版本，移除历史条目：${dropped.join(', ')}`);
 }
-detail.updated_at = new Date().toISOString();
-await writeJson(detailPath, detail);
+// 只在内容真的变化时才写文件并刷新 updated_at：否则每天定时跑都会产生一条只改
+// 时间戳的提交，工作流会误判成"有新版本"，索引里也会出现无意义的抖动。
+const nextContent = JSON.stringify(detail, null, 2) + '\n';
+const prevContent = await fs.readFile(detailPath, 'utf8').catch(() => '');
+if (nextContent !== prevContent) {
+  detail.updated_at = new Date().toISOString();
+  await writeJson(detailPath, detail);
+  console.log(`apps/${SLUG}.json 已更新（最新 ${latest}）`);
+} else {
+  console.log(`apps/${SLUG}.json 无变化（最新 ${latest}），不写文件`);
+}
 
 const meta = {
   slug: SLUG,
