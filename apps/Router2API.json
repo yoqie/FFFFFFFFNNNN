@@ -12,26 +12,6 @@
   "install_type": "root",
   "is_docker": false,
   "service_port": "5242",
-  "releases": {
-    "2.0.9": {
-      "version": "2.0.9",
-      "release_note": "Router2API v2.0.9 飞牛 fnOS 原生包（arm/x86），由本源从上游 NNNNolan 的最新源码自动构建。",
-      "updated_at": "2026-10-17T11:41:31Z",
-      "packages": {
-        "x86": {
-          "version": "2.0.9",
-          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/Router2API-2.0.9/Router2API_v2.0.9_amd64.fpk",
-          "sha256": "b74f8f26b70f6ba83c2d40bb612531202930040d0073152b0ce51f6f0490d3dc",
-          "size": 71455551
-        },
-        "arm": {
-          "version": "2.0.9",
-          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/Router2API-2.0.9/Router2API_v2.0.9_arm64.fpk",
-          "sha256": "341537868beb8ecc135a2c0380537d6f144eea5def22e94a61b408389ee9a410",
-          "size": 68729232
-        }
-      }
-    }
-  },
+  "releases": {},
   "updated_at": "2026-10-17T11:41:40.623Z"
 }
