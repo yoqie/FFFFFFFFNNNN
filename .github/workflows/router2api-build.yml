@@ -39,12 +39,12 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.ver.outputs.version }}
-        upstream: ${{ steps.ver.outputs.upstream }}
+      upstream: ${{ steps.ver.outputs.upstream }}
       ref: ${{ steps.ver.outputs.ref }}
       skip: ${{ steps.ver.outputs.skip }}
     steps:
-        # 需要 checkout 才能调用 scripts/next-version.mjs 计算发布版本
-        - uses: actions/checkout@v4
+      # 需要 checkout 才能调用 scripts/next-version.mjs 计算发布版本
+      - uses: actions/checkout@v4
 
       - name: 解析目标版本
         id: ver
