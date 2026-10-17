@@ -1,0 +1,26 @@
+#!/bin/bash
+# 安装前检查：只做端口占用预检。
+#
+# ⚠️ 注意时机：本脚本在"安装前"执行，此时 app.tgz 还没解压到 target，
+#    ${TRIM_APPDEST} 下是空的（或仅有空目录）。
+#    所以这里**不能**检查主程序/Redis 是否存在——那必然失败并把安装中止。
+#    包体完整性检查放在 install_callback（安装后，文件已就位）。
+
+set -u
+
+# 端口占用预检：向导端口若已被占用，提前告知，避免装完打不开
+PORT="${wizard_port:-${TRIM_SERVICE_PORT:-5242}}"
+case "${PORT}" in
+    ''|*[!0-9]*) PORT=5242 ;;
+esac
+
+if command -v ss >/dev/null 2>&1; then
+    if ss -tln 2>/dev/null | grep -qE ":${PORT}[[:space:]]"; then
+        MSG="✗ 端口 ${PORT} 已被占用，请在安装向导中更换端口。"
+        echo "${MSG}" >&2
+        [ -n "${TRIM_TEMP_LOGFILE:-}" ] && echo "${MSG}" >> "${TRIM_TEMP_LOGFILE}" 2>/dev/null
+        exit 1
+    fi
+fi
+
+exit 0

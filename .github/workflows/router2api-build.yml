@@ -1,0 +1,248 @@
+name: router2api-build
+
+# Router2API「从上游直接打包」流程（fnOS 原生双架构 fpk，不用等第三方打包）：
+#   1. prepare：定位上游 NNNNolan/Router2API 的目标版本（默认最新正式 tag），本源已有该版本则跳过
+#   2. build  ：按架构拉上游源码 → pnpm 构建前端 → dotnet 自包含发布 → 内置 Debian Redis
+#               → 组装 fnOS 应用壳 → fnpack 打包 → 上传 artifact
+#   3. release：两个架构都成功后发布本源 Release（tag：Router2API-<版本>）
+#   4. sync   ：同步索引、把下载地址指向本源、清理旧版 Release、重建 fnpack.json 并提交
+#
+# 应用壳与组装逻辑取自打包方 cliii-one/Router2API（见 scripts/assemble-router2api.sh 头部说明），
+# 作者字段已写回最上游 NNNNolan。
+#
+# 手动指定版本：Actions → router2api-build → Run workflow → version 填 2.0.9
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "要构建的版本号（如 2.0.9；留空=自动取上游最新正式 tag）"
+        required: false
+        default: ""
+      upstream_ref:
+        description: "上游 NNNNolan/Router2API 的分支/标签（留空=跟随 version/tag）"
+        required: false
+        default: ""
+      force:
+        description: "本源已存在该版本时也强制重建"
+        type: boolean
+        default: false
+  schedule:
+    # UTC 22:00 = 北京 06:00，排在打包方检查(20:00 UTC)与索引同步(21:30 UTC)之后
+    - cron: "0 22 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      ref: ${{ steps.ver.outputs.ref }}
+      skip: ${{ steps.ver.outputs.skip }}
+    steps:
+      - name: 解析目标版本
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IN_VERSION: ${{ inputs.version }}
+          IN_REF: ${{ inputs.upstream_ref }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+          api() { curl -sfL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "$@"; }
+
+          # 上游最新正式 tag；没有非预发布版时退回最新非草稿版
+          LATEST_TAG=$(api "https://api.github.com/repos/NNNNolan/Router2API/releases?per_page=20" | python3 -c "
+          import json,sys
+          rels=[r for r in json.load(sys.stdin) if not r.get('draft')]
+          stable=[r['tag_name'] for r in rels if not r.get('prerelease')]
+          print((stable or [r['tag_name'] for r in rels] or [''])[0])
+          ")
+          REF="${IN_REF:-${LATEST_TAG}}"
+          [ -n "${REF}" ] || { echo "::error::拿不到上游 tag，请手动指定 upstream_ref"; exit 1; }
+
+          # 版本号优先取上游源码声明的 <Version>（最准），退化到 tag 去掉 v
+          VERSION="${IN_VERSION}"
+          if [ -z "${VERSION}" ]; then
+            VERSION=$(curl -sfL "https://raw.githubusercontent.com/NNNNolan/Router2API/${REF}/src/Router.Contracts/Router.Contracts.csproj" \
+              | grep -oPm1 '(?<=<Version>)[^<]+' || true)
+          fi
+          [ -n "${VERSION}" ] || VERSION="$(printf '%s' "${REF}" | sed -E 's/^v//')"
+          VERSION="${VERSION#v}"
+
+          # 本源已经有这个版本（tag Router2API-<版本>）就不重复构建
+          SKIP="false"
+          if [ "${FORCE}" != "true" ]; then
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${GH_TOKEN}" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/Router2API-${VERSION}")
+            [ "${CODE}" = "200" ] && SKIP="true"
+          fi
+
+          echo "上游 ref：${REF}"
+          echo "目标版本：${VERSION}"
+          echo "需要构建：$([ "${SKIP}" = "true" ] && echo 否 || echo 是)"
+          {
+            echo "version=${VERSION}"
+            echo "ref=${REF}"
+            echo "skip=${SKIP}"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.skip != 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: amd64
+          # 公共仓库的 arm64 runner 免费，直接原生构建
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout 本仓库（应用壳与打包脚本）
+        uses: actions/checkout@v4
+
+      - name: Checkout 上游 Router2API
+        uses: actions/checkout@v4
+        with:
+          repository: NNNNolan/Router2API
+          ref: ${{ needs.prepare.outputs.ref }}
+          path: upstream
+          fetch-depth: 0
+
+      - name: 安装 .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: 安装 Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: 启用 corepack（用上游声明的 pnpm 版本）
+        run: corepack enable
+
+      - name: 安装 fnpack（飞牛官方打包工具）
+        run: |
+          # arm64 官方最高 1.2.1，amd64 用 1.2.3
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            FNPACK_URL="https://static2.fnnas.com/fnpack/fnpack-1.2.1-linux-arm64"
+          else
+            FNPACK_URL="https://static2.fnnas.com/fnpack/fnpack-1.2.3-linux-amd64"
+          fi
+          curl -sfL --retry 3 -o /tmp/fnpack "${FNPACK_URL}"
+          chmod +x /tmp/fnpack
+          sudo mv /tmp/fnpack /usr/local/bin/fnpack
+          fnpack 2>&1 | grep -i version || true
+
+      - name: 组装 fnOS 应用目录
+        env:
+          R2A_VERSION: ${{ needs.prepare.outputs.version }}
+          R2A_ARCH: ${{ matrix.arch }}
+        run: |
+          STAGE_DIR="${GITHUB_WORKSPACE}/stage" \
+          UPSTREAM_DIR="${GITHUB_WORKSPACE}/upstream" \
+          R2A_VERSION="${R2A_VERSION}" \
+          R2A_ARCH="${R2A_ARCH}" \
+            bash scripts/assemble-router2api.sh
+
+      - name: 组装结果快照（始终执行，便于远程诊断）
+        if: always()
+        run: |
+          {
+            echo "架构：${{ matrix.arch }}  版本：${{ needs.prepare.outputs.version }}"
+            echo "== 包根目录 =="
+            ls -la stage/Router2API/ 2>&1 || true
+            echo "== 关键文件 =="
+            for f in stage/Router2API/manifest \
+                     stage/Router2API/app/host/Router.Host \
+                     stage/Router2API/app/host/Router.Host.dll \
+                     stage/Router2API/app/host/wwwroot/index.html \
+                     stage/Router2API/app/redis/redis-server \
+                     stage/Router2API/app/redis/lib/libjemalloc.so.2; do
+              if [ -e "${f}" ]; then echo "  OK   ${f}"; else echo "  缺失 ${f}"; fi
+            done
+            echo "== 体积 =="
+            du -sh stage/Router2API/app/host stage/Router2API/app/redis 2>&1 || true
+          } | tee assemble-report.txt
+
+      - name: fnpack 打包
+        env:
+          R2A_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          cd stage/Router2API
+          fnpack build
+          # fnpack 固定输出 Router2API.fpk（不含版本号），手动加版本与架构后缀
+          FPK=$(ls *.fpk | head -1)
+          OUT="${GITHUB_WORKSPACE}/Router2API_v${R2A_VERSION}_${{ matrix.arch }}.fpk"
+          mv "${FPK}" "${OUT}"
+          ls -la "${OUT}"
+
+      - name: 上传 fpk
+        uses: actions/upload-artifact@v4
+        with:
+          name: Router2API_v${{ needs.prepare.outputs.version }}_${{ matrix.arch }}
+          path: Router2API_v${{ needs.prepare.outputs.version }}_${{ matrix.arch }}.fpk
+          if-no-files-found: error
+
+  release:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: 下载全部 fpk
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: 发布本源 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          ls -la dist
+          TAG="Router2API-${VERSION}"
+          NOTES="Router2API v${VERSION} 飞牛 fnOS 原生包（amd64/arm64），由本仓库从上游自动构建。
+          上游项目：https://github.com/NNNNolan/Router2API
+          打包流程说明：见仓库 scripts/assemble-router2api.sh"
+          if gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "${TAG}" dist/*.fpk --repo "${GITHUB_REPOSITORY}" --clobber
+          else
+            gh release create "${TAG}" dist/*.fpk --repo "${GITHUB_REPOSITORY}" \
+              --title "Router2API ${VERSION}" --notes "${NOTES}"
+          fi
+
+  sync:
+    needs: [prepare, release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 同步索引并指向本源地址
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          node scripts/sync-router2api.mjs
+          node scripts/mirror-router2api.mjs
+          node scripts/prune-releases.mjs --slug Router2API
+          node scripts/update-index.mjs --repo "${REPO}"
+
+      - name: 提交索引变更
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "索引无变化，无需提交"
+          else
+            git add -A apps build fnpack.json README.md assets
+            git commit -m "chore: Router2API ${{ needs.prepare.outputs.version }} 已由本仓库构建，索引指向本源 [skip ci]"
+            git push
+          fi

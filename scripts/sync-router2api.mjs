@@ -33,11 +33,14 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
 const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 && argv[i + 1] ? argv[i + 1] : d; };
 
-const UPSTREAM_REPOS = (process.env.ROUTER2API_UPSTREAM_REPO || 'cliii-one/Router2API,yoqie/Router2API')
-  .split(',').map((s) => s.trim()).filter(Boolean);
-// 列表靠后的仓库优先级更高：同名 tag（版本）以靠后的仓库为准
 const REPO = opt('--repo', process.env.REPO || 'yoqie/FFFFFFFFNNNN');
 const SLUG = 'Router2API';
+// 列表靠后的仓库优先级更高：同名版本以靠后的仓库为准。
+// 最后一项是本仓库自己构建发布的 fpk（tag 形如 Router2API-2.0.9），优先级最高：
+// 只要本仓库自己出过包，索引就用自己那份，不再依赖第三方打包方是否跟上上游。
+const UPSTREAM_REPOS = (process.env.ROUTER2API_UPSTREAM_REPO
+  || `cliii-one/Router2API,yoqie/Router2API,${REPO}`)
+  .split(',').map((s) => s.trim()).filter(Boolean);
 
 // —— 最上游作者（固定写死，不被上游 manifest 的打包者署名覆盖）——
 const MAINTAINER = 'NNNNolan';
@@ -133,7 +136,11 @@ async function fetchAllReleases() {
     try {
       for (let page = 1; ; page += 1) {
         const rels = await ghJson(`https://api.github.com/repos/${repo}/releases?per_page=100&page=${page}`);
-        all.push(...rels);
+        for (const r of rels) {
+          // 本仓库里还挂着 dsh / 1panel 的 Release，只认 Router2API-<版本> 这种 tag
+          if (repo === REPO && !String(r.tag_name).startsWith(`${SLUG}-`)) continue;
+          all.push({ ...r, __repo: repo });
+        }
         if (!Array.isArray(rels) || rels.length < 100) break;
       }
     } catch (e) {
@@ -157,7 +164,7 @@ function packagesFromAssets(rel) {
     const arch = ARCH_MAP[suffix];
     if (!arch || specific.has(arch) || fallback.has(arch)) continue;
     const pkg = {
-      version: rel.tag_name.replace(/^v/, ''),
+      version: rel.tag_name.replace(/^v/, '').replace(new RegExp(`^${SLUG}-`), ''),
       download_url: a.browser_download_url,
       sha256: a.digest && a.digest.startsWith('sha256:') ? a.digest.slice('sha256:'.length) : null,
       size: a.size,
@@ -201,14 +208,16 @@ let synced = 0;
 for (const rel of releases) {
   const packages = packagesFromAssets(rel);
   if (packages.size === 0) continue;
-  const version = rel.tag_name.replace(/^v/, '');
+  const version = rel.tag_name.replace(/^v/, '').replace(new RegExp(`^${SLUG}-`), '');
   for (const [arch, pkg] of packages) {
     if (!pkg.sha256) {
       console.log(`${version} ${arch}: 资产缺少 digest，回退为下载计算 sha256`);
       pkg.sha256 = await sha256Of(pkg.download_url);
     }
   }
-  const note = `Router2API v${version} 飞牛 fnOS 原生包（${[...packages.keys()].sort().join('/')}），由 ${UPSTREAM_REPOS[0]} 自动打包；宿主上游见 ${MAINTAINER_URL}。`;
+  const note = rel.__repo === REPO
+    ? `Router2API v${version} 飞牛 fnOS 原生包（${[...packages.keys()].sort().join('/')}），由本源从上游 ${MAINTAINER} 的最新源码自动构建。`
+    : `Router2API v${version} 飞牛 fnOS 原生包（${[...packages.keys()].sort().join('/')}），由 ${rel.__repo} 自动打包；宿主上游见 ${MAINTAINER_URL}。`;
   // 同版本先删后加：保证键序保持"旧→新"，且以最新一次构建的资产为准
   delete detail.releases[version];
   detail.releases[version] = {

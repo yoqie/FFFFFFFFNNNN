@@ -16,7 +16,7 @@
     "2.0.8": {
       "version": "2.0.8",
       "release_note": "Router2API v2.0.8 飞牛 fnOS 原生包（arm/x86），由 cliii-one/Router2API 自动打包；宿主上游见 https://github.com/NNNNolan/Router2API。",
-      "updated_at": "2026-10-16T22:19:01Z",
+      "updated_at": "2026-10-17T11:08:12Z",
       "packages": {
         "x86": {
           "version": "2.0.8",
@@ -33,5 +33,5 @@
       }
     }
   },
-  "updated_at": "2026-10-17T11:16:39.436Z"
+  "updated_at": "2026-10-17T11:39:37.349Z"
 }
