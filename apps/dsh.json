@@ -20,13 +20,13 @@
       "packages": {
         "x86": {
           "version": "0.2.1-alpha.5.2",
-          "download_url": "https://github.com/yoqie/FnDepot/releases/download/dsh-0.2.1-alpha.5.2/DSH_v0.2.1-alpha.5.2_amd64.fpk",
+          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.1-alpha.5.2/DSH_v0.2.1-alpha.5.2_amd64.fpk",
           "sha256": "5604efdd96e5b37632c6a9ae791db395d95f770a010e276ef031bb0d41395b09",
           "size": 166213171
         },
         "arm": {
           "version": "0.2.1-alpha.5.2",
-          "download_url": "https://github.com/yoqie/FnDepot/releases/download/dsh-0.2.1-alpha.5.2/DSH_v0.2.1-alpha.5.2_arm64.fpk",
+          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.1-alpha.5.2/DSH_v0.2.1-alpha.5.2_arm64.fpk",
           "sha256": "22fd0c1d95070f7efc5e393ac3f4a44ed0c84cbe9e21d941b46828b48ea2663a",
           "size": 169187331
         }

@@ -19,7 +19,7 @@
  *
  * 环境变量：
  *   GH_TOKEN / GITHUB_TOKEN  必需（需 contents:write 权限），工作流里用 github.token
- *   REPO                     默认 yoqie/FnDepot
+ *   REPO                     默认 yoqie/FFFFFFFFNNNN
  *
  * 依赖：curl（ubuntu-latest 与飞牛系统均自带），用于流式上传大文件，避免整包读入内存。
  */
@@ -38,7 +38,7 @@ const argv = process.argv.slice(2);
 const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 && argv[i + 1] ? argv[i + 1] : d; };
 const has = (k) => argv.includes(k);
 
-const REPO = opt('--repo', process.env.REPO || 'yoqie/FnDepot');
+const REPO = opt('--repo', process.env.REPO || 'yoqie/FFFFFFFFNNNN');
 const SLUG = 'dsh';
 const ALL = has('--all');
 const FORCE = has('--force');

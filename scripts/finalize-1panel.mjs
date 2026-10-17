@@ -17,7 +17,7 @@ const opt = (k, d) => {
   const i = args.indexOf(k);
   return i >= 0 && args[i + 1] ? args[i + 1] : d;
 };
-const REPO = opt('--repo', process.env.REPO || 'yoqie/FnDepot');
+const REPO = opt('--repo', process.env.REPO || 'yoqie/FFFFFFFFNNNN');
 const TAG = opt('--tag', '');
 const DIST = opt('--dist', path.join(ROOT, 'dist'));
 if (!TAG) { console.error('missing --tag'); process.exit(1); }

@@ -15,7 +15,7 @@
  *   node scripts/prune-releases.mjs --slug 1panel --keep 2      # 想多留一个旧版就 --keep 2
  *   node scripts/prune-releases.mjs --slug 1panel --dry-run      # 只打印计划
  *
- * 环境变量：GH_TOKEN / GITHUB_TOKEN（需 contents:write）、REPO（默认 yoqie/FnDepot）
+ * 环境变量：GH_TOKEN / GITHUB_TOKEN（需 contents:write）、REPO（默认 yoqie/FFFFFFFFNNNN）
  *
  * 安全护栏：如果被保留的 Release 一个资产都没有，直接报错退出，绝不删旧版。
  */
@@ -32,7 +32,7 @@ const has = (k) => argv.includes(k);
 const SLUG = opt('--slug', '');
 const KEEP = Math.max(1, Number(opt('--keep', '1')) || 1);
 const KEEP_TAG = opt('--keep-tag', '');
-const REPO = opt('--repo', process.env.REPO || 'yoqie/FnDepot');
+const REPO = opt('--repo', process.env.REPO || 'yoqie/FFFFFFFFNNNN');
 const DRY = has('--dry-run');
 const TOKEN = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || '';
 

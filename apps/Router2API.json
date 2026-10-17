@@ -20,13 +20,13 @@
       "packages": {
         "x86": {
           "version": "2.0.8",
-          "download_url": "https://github.com/yoqie/FnDepot/releases/download/Router2API-2.0.8/Router2API_v2.0.8_amd64.fpk",
+          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/Router2API-2.0.8/Router2API_v2.0.8_amd64.fpk",
           "sha256": "c43760c170ac9533cf75b174131a1e18f1d97057108e9fcb25d2b0b12554413e",
           "size": 71457703
         },
         "arm": {
           "version": "2.0.8",
-          "download_url": "https://github.com/yoqie/FnDepot/releases/download/Router2API-2.0.8/Router2API_v2.0.8_arm64.fpk",
+          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/Router2API-2.0.8/Router2API_v2.0.8_arm64.fpk",
           "sha256": "5fa58742836817a7775b09f817fddd9d630a03855c718511bbce83836a3d1087",
           "size": 68726519
         }

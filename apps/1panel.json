@@ -6,12 +6,12 @@
       "updated_at": "2026-10-15T11:35:28.856Z",
       "packages": {
         "x86": {
-          "download_url": "https://github.com/yoqie/FnDepot/releases/download/1panel-2.3.2-2/1panel_2.3.2-2_x86.fpk",
+          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/1panel-2.3.2-2/1panel_2.3.2-2_x86.fpk",
           "sha256": "9d3769c63e106cce608737d44cacc58605b778c73e3a9bfffee99e511f9adc97",
           "size": 64185487
         },
         "arm": {
-          "download_url": "https://github.com/yoqie/FnDepot/releases/download/1panel-2.3.2-2/1panel_2.3.2-2_arm.fpk",
+          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/1panel-2.3.2-2/1panel_2.3.2-2_arm.fpk",
           "sha256": "b9e79c332d6adcaba1382078aa7c5f7b1874fc9a53b8f7948be084523b4883fe",
           "size": 59732363
         }
@@ -22,12 +22,12 @@
       "updated_at": "2026-10-15T11:35:28.856Z",
       "packages": {
         "x86": {
-          "download_url": "https://github.com/yoqie/FnDepot/releases/download/1panel-2.3.2-2/1panel_2.3.2-2_x86.fpk",
+          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/1panel-2.3.2-2/1panel_2.3.2-2_x86.fpk",
           "sha256": "9d3769c63e106cce608737d44cacc58605b778c73e3a9bfffee99e511f9adc97",
           "size": 64185487
         },
         "arm": {
-          "download_url": "https://github.com/yoqie/FnDepot/releases/download/1panel-2.3.2-2/1panel_2.3.2-2_arm.fpk",
+          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/1panel-2.3.2-2/1panel_2.3.2-2_arm.fpk",
           "sha256": "b9e79c332d6adcaba1382078aa7c5f7b1874fc9a53b8f7948be084523b4883fe",
           "size": 59732363
         }
@@ -43,13 +43,13 @@
   "categories": [
     "系统工具"
   ],
-  "icon_url": "https://raw.githubusercontent.com/yoqie/FnDepot/main/assets/1panel/ICON.PNG",
-  "readme_url": "https://raw.githubusercontent.com/yoqie/FnDepot/main/assets/1panel/README.md",
-  "bug_report_url": "https://github.com/yoqie/FnDepot/issues",
+  "icon_url": "https://raw.githubusercontent.com/yoqie/FFFFFFFFNNNN/main/assets/1panel/ICON.PNG",
+  "readme_url": "https://raw.githubusercontent.com/yoqie/FFFFFFFFNNNN/main/assets/1panel/README.md",
+  "bug_report_url": "https://github.com/yoqie/FFFFFFFFNNNN/issues",
   "maintainer": "1Panel-dev",
   "maintainer_url": "https://github.com/1Panel-dev/1Panel",
   "distributor": "FnDepot",
-  "distributor_url": "https://github.com/yoqie/FnDepot",
+  "distributor_url": "https://github.com/yoqie/FFFFFFFFNNNN",
   "run_as": "root",
   "install_type": "root",
   "is_docker": false,

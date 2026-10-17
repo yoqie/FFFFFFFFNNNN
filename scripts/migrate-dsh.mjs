@@ -29,7 +29,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const REPO = process.env.REPO || 'yoqie/FnDepot';
+const REPO = process.env.REPO || 'yoqie/FFFFFFFFNNNN';
 const TOKEN = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || '';
 const API = 'https://api.github.com';
 

@@ -36,7 +36,7 @@ const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 && argv[i + 1] 
 const UPSTREAM_REPOS = (process.env.ROUTER2API_UPSTREAM_REPO || 'cliii-one/Router2API,yoqie/Router2API')
   .split(',').map((s) => s.trim()).filter(Boolean);
 // 列表靠后的仓库优先级更高：同名 tag（版本）以靠后的仓库为准
-const REPO = opt('--repo', process.env.REPO || 'yoqie/FnDepot');
+const REPO = opt('--repo', process.env.REPO || 'yoqie/FFFFFFFFNNNN');
 const SLUG = 'Router2API';
 
 // —— 最上游作者（固定写死，不被上游 manifest 的打包者署名覆盖）——

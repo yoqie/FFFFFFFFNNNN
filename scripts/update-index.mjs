@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 && args[i + 1] ? args[i + 1] : d; };
-const REPO = opt('--repo', process.env.REPO || 'yoqie/FnDepot');
+const REPO = opt('--repo', process.env.REPO || 'yoqie/FFFFFFFFNNNN');
 
 const readJson = async (p, d) => JSON.parse(await fs.readFile(p, 'utf8').catch(() => JSON.stringify(d)));
 const writeJson = (p, o) => fs.writeFile(p, JSON.stringify(o, null, 2) + '\n');
