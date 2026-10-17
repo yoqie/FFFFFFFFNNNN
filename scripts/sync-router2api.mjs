@@ -54,6 +54,19 @@ if (TOKEN) HEADERS.Authorization = `Bearer ${TOKEN}`;
 const readJson = async (p, d) => JSON.parse(await fs.readFile(p, 'utf8').catch(() => JSON.stringify(d)));
 const writeJson = (p, o) => fs.writeFile(p, JSON.stringify(o, null, 2) + '\n');
 
+// 只对"语义内容"取指纹：忽略 download_url 指向本源还是上游（sync 会重置成上游、
+// mirror 再改回本源，这只是同一次运行内的中间态），也忽略 updated_at 自身。
+// 指纹没变就不写文件，定时任务因此不会每天产生一条只改时间戳的空提交。
+const fingerprint = (d) => JSON.stringify({
+  meta: [d.app_name, d.display_name, d.desc, d.categories, d.maintainer, d.maintainer_url, d.service_port],
+  releases: Object.entries(d.releases || {}).sort().map(([v, rel]) => [
+    v,
+    rel.release_note,
+    rel.updated_at,
+    Object.entries(rel.packages || {}).sort().map(([arch, p]) => [arch, p.version, p.sha256, p.size]),
+  ]),
+});
+
 async function ghJson(url) {
   const r = await fetch(url, { headers: HEADERS });
   if (!r.ok) throw new Error(`GitHub API ${url} -> HTTP ${r.status}`);
@@ -161,6 +174,9 @@ const detail = await readJson(detailPath, {
   releases: {},
 });
 
+// 改动指纹要在任何"归位/重置"之前取，作为"内容有没有真的变"的基准
+const beforeFp = fingerprint(detail);
+
 // 作者/上游信息每次强制归位到最上游，防止历史文件或上游署名把索引带偏
 if (detail.maintainer !== MAINTAINER || detail.maintainer_url !== MAINTAINER_URL) {
   console.log(`作者归位：${detail.maintainer || '(空)'} → ${MAINTAINER}（最上游）`);
@@ -210,16 +226,14 @@ detail.releases = sortedReleases;
 if (dropped.length) {
   console.log(`索引只保留最新 ${kept.length} 个版本，移除历史条目：${dropped.join(', ')}`);
 }
-// 只在内容真的变化时才写文件并刷新 updated_at：否则每天定时跑都会产生一条只改
-// 时间戳的提交，工作流会误判成"有新版本"，索引里也会出现无意义的抖动。
-const nextContent = JSON.stringify(detail, null, 2) + '\n';
-const prevContent = await fs.readFile(detailPath, 'utf8').catch(() => '');
-if (nextContent !== prevContent) {
+// 语义内容没变就别动文件：此刻磁盘上保留的正是本源镜像地址，硬写会把它改回上游，
+// 并顺带刷新 updated_at，让工作流误判成"有新版本"而提交一条空改动。
+if (fingerprint(detail) !== beforeFp) {
   detail.updated_at = new Date().toISOString();
   await writeJson(detailPath, detail);
   console.log(`apps/${SLUG}.json 已更新（最新 ${latest}）`);
 } else {
-  console.log(`apps/${SLUG}.json 无变化（最新 ${latest}），不写文件`);
+  console.log(`apps/${SLUG}.json 无变化（最新 ${latest}），保持本源下载地址不动`);
 }
 
 const meta = {
