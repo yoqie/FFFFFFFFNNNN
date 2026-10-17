@@ -27,8 +27,9 @@ on:
         type: boolean
         default: false
   schedule:
-    # UTC 22:00 = 北京 06:00，排在打包方检查(20:00 UTC)与索引同步(21:30 UTC)之后
-    - cron: "0 22 * * *"
+    # 每小时 15 分检查一次上游是否有新 Release（取得最新 tag 后按 <版本> 去重），
+    # 已有该版本的 Release 就跳过，不浪费 CI
+    - cron: "15 * * * *"
 
 permissions:
   contents: write

@@ -7,7 +7,8 @@ name: router2api-sync
 #   下载不再依赖上游仓库；索引里的作者固定写最上游 NNNNolan
 on:
   schedule:
-    - cron: '30 21 * * *' # UTC 21:30 = 北京时间次日凌晨 5:30（与 dsh-sync 的 21:00 错开）
+    # 每小时 45 分兜底同步一次索引（与 dsh-sync 的 40 分错开）
+    - cron: "45 * * * *"
   workflow_dispatch:
     inputs:
       mirror:
@@ -57,4 +58,6 @@ jobs:
           VERSION=""
           if [ -f build/Router2API/meta.json ]; then VERSION=$(node -p "require('./build/Router2API/meta.json').version"); fi
           git commit -m "chore: sync Router2API ${VERSION}"
+          # 多个工作流可能同时在改索引，推送前先变基
+          git pull --rebase --autostash || true
           git push

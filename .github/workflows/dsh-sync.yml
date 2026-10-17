@@ -8,7 +8,8 @@ name: dsh-sync
 # - 手动触发可用 force=1 执行一次性迁移（下线旧 DeepSeek Harness 自建链路）
 on:
   schedule:
-    - cron: '0 21 * * *' # UTC 21:00 = 北京时间次日凌晨 5 点
+    # 每小时 40 分兜底同步一次索引（构建工作流自身已即时同步，这里只是保险）
+    - cron: "40 * * * *"
   workflow_dispatch:
     inputs:
       force:
@@ -69,4 +70,6 @@ jobs:
           VERSION=""
           if [ -f build/dsh/meta.json ]; then VERSION=$(node -p "require('./build/dsh/meta.json').version"); fi
           git commit -m "chore: sync DSH ${VERSION}"
+          # 多个工作流可能同时在改索引，推送前先变基
+          git pull --rebase --autostash || true
           git push
