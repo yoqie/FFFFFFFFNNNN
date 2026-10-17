@@ -6,8 +6,8 @@
     "AI赋能",
     "编程开发"
   ],
-  "maintainer": "cliii-one",
-  "maintainer_url": "https://github.com/cliii-one/DSH_FNOS",
+  "maintainer": "deepseek-ai",
+  "maintainer_url": "https://github.com/deepseek-ai/deepseek-harness",
   "run_as": "root",
   "install_type": "root",
   "is_docker": false,
@@ -33,5 +33,5 @@
       }
     }
   },
-  "updated_at": "2026-10-16T23:17:59.619Z"
+  "updated_at": "2026-10-17T11:26:58.927Z"
 }

@@ -33,7 +33,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
 const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 && argv[i + 1] ? argv[i + 1] : d; };
 
-const UPSTREAM_REPOS = (process.env.ROUTER2API_UPSTREAM_REPO || 'cliii-one/Router2API')
+const UPSTREAM_REPOS = (process.env.ROUTER2API_UPSTREAM_REPO || 'cliii-one/Router2API,yoqie/Router2API')
   .split(',').map((s) => s.trim()).filter(Boolean);
 // 列表靠后的仓库优先级更高：同名 tag（版本）以靠后的仓库为准
 const REPO = opt('--repo', process.env.REPO || 'yoqie/FnDepot');
@@ -128,10 +128,20 @@ async function sha256Of(url) {
 async function fetchAllReleases() {
   const all = [];
   for (const repo of UPSTREAM_REPOS) {
-    for (let page = 1; ; page += 1) {
-      const rels = await ghJson(`https://api.github.com/repos/${repo}/releases?per_page=100&page=${page}`);
-      all.push(...rels);
-      if (!Array.isArray(rels) || rels.length < 100) break;
+    // 允许列表里存在"还没建/已删除"的仓库（例如自己那套打包 fork 还没 fork 出来），
+    // 命中 404 只跳过它，不要让整条同步链失败。
+    try {
+      for (let page = 1; ; page += 1) {
+        const rels = await ghJson(`https://api.github.com/repos/${repo}/releases?per_page=100&page=${page}`);
+        all.push(...rels);
+        if (!Array.isArray(rels) || rels.length < 100) break;
+      }
+    } catch (e) {
+      if (/HTTP 404/.test(e.message)) {
+        console.log(`跳过不存在的上游仓库：${repo}`);
+        continue;
+      }
+      throw e;
     }
   }
   return all.filter((r) => !r.draft);
