@@ -27,11 +27,14 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
 const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 && argv[i + 1] ? argv[i + 1] : d; };
 
-const UPSTREAM_REPOS = (process.env.DSH_UPSTREAM_REPO || 'cliii-one/DSH_FNOS,yoqie/DSH_FNOS')
-  .split(',').map((s) => s.trim()).filter(Boolean);
-// 列表靠后的仓库优先级更高：同名 tag（版本）以双架构构建仓库为准
 const REPO = opt('--repo', process.env.REPO || 'yoqie/FFFFFFFFNNNN');
 const SLUG = 'dsh';
+// 列表靠后的仓库优先级更高：同名版本以靠后的仓库为准。
+// 最后一项是本仓库自己从上游 deepseek-ai/deepseek-harness 构建发布的 fpk
+// （tag 形如 dsh-0.2.1-rc.2），优先级最高：自己出过包就用自己那份。
+const UPSTREAM_REPOS = (process.env.DSH_UPSTREAM_REPO
+  || `cliii-one/DSH_FNOS,yoqie/DSH_FNOS,${REPO}`)
+  .split(',').map((s) => s.trim()).filter(Boolean);
 
 // —— 最上游作者（固定写死）——
 // DSH 本体是 deepseek-ai/deepseek-harness；cliii-one/DSH_FNOS（及其 fork）只是把它
@@ -123,7 +126,11 @@ async function fetchAllReleases() {
   for (const repo of UPSTREAM_REPOS) {
     for (let page = 1; ; page += 1) {
       const rels = await ghJson(`https://api.github.com/repos/${repo}/releases?per_page=100&page=${page}`);
-      all.push(...rels);
+      for (const r of rels) {
+        // 本仓库里还挂着 1panel / Router2API 的 Release，只认 dsh-<版本> 这种 tag
+        if (repo === REPO && !String(r.tag_name).startsWith(`${SLUG}-`)) continue;
+        all.push({ ...r, __repo: repo });
+      }
       if (!Array.isArray(rels) || rels.length < 100) break;
     }
   }
@@ -140,7 +147,7 @@ function packagesFromAssets(rel) {
     const arch = ARCH_MAP[suffix];
     if (!arch || specific.has(arch) || fallback.has(arch)) continue;
     const pkg = {
-      version: rel.tag_name.replace(/^v/, ''),
+      version: rel.tag_name.replace(/^v/, '').replace(new RegExp(`^${SLUG}-`), ''),
       download_url: a.browser_download_url,
       sha256: a.digest && a.digest.startsWith('sha256:') ? a.digest.slice('sha256:'.length) : null,
       size: a.size,
@@ -181,7 +188,7 @@ let synced = 0;
 for (const rel of releases) {
   const packages = packagesFromAssets(rel);
   if (packages.size === 0) continue;
-  const version = rel.tag_name.replace(/^v/, '');
+  const version = rel.tag_name.replace(/^v/, '').replace(new RegExp(`^${SLUG}-`), '');
   for (const [arch, pkg] of packages) {
     if (!pkg.sha256) {
       console.log(`${version} ${arch}: 资产缺少 digest，回退为下载计算 sha256`);

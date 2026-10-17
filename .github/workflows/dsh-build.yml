@@ -1,0 +1,398 @@
+# =============================================================
+# DSH for fnOS - GitHub Actions 自动构建（amd64 + arm64 双架构）
+#
+# 全程在 GitHub 服务器上原生构建，NAS 本机零负担：
+#   amd64 → ubuntu-24.04（x86_64 原生运行器）
+#   arm64 → ubuntu-24.04-arm（ARM64 原生运行器，公共仓库免费）
+# 依赖的原生模块（koffi/node-pty 等）在各自架构上原生安装，
+# 与 NAS 架构一致，免去交叉安装导致的产物架构不匹配。
+#
+# 触发方式：
+#   1. push 到 master 自动构建
+#   2. 手动 workflow_dispatch（可指定上游 ref，默认 master）
+#   3. 每日定时检查上游是否发新版，有新版本才构建发布
+#
+# 流程：拉上游源码 -> pnpm 构建 -> pack tgz -> 组装应用壳（运行时用 nodejs_v24 依赖）
+#      -> fnpack 打包（按架构取官方对应二进制）-> 上传 artifact -> 汇总发 GitHub Release
+#
+# Release 产物（同一 tag 下两个资产，按 NAS 架构选用）：
+#   DSH_v<版本>_amd64.fpk → x86_64（AMD/Intel）NAS
+#   DSH_v<版本>_arm64.fpk → ARM64 NAS
+# =============================================================
+name: dsh-build
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: "上游 deepseek-harness 的分支/标签"
+        required: false
+        default: "master"
+      force_release:
+        description: "即使版本无变化也强制发布"
+        type: boolean
+        required: false
+        default: false
+      version_suffix:
+        description: "附加版本后缀（如 .1），用于同一上游版本的补丁发布；用数字段保证排序低于下一个上游版本"
+        required: false
+        default: ""
+  schedule:
+    # 每天 UTC 20:30（北京次日 04:30）检查上游；晚于打包方(20:00)、早于索引同步(21:00)
+    - cron: "30 20 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: 构建并打包（${{ matrix.arch }}）
+    strategy:
+      # 一个架构失败不取消另一个，便于定位单侧问题
+      fail-fast: false
+      matrix:
+        include:
+          # x86_64：AMD/Intel NAS 主流架构；npm 原生产物目录名为 linux-x64
+          - arch: amd64
+            runner: ubuntu-24.04
+            node_arch: x64
+          # ARM64 NAS；npm 原生产物目录名为 linux-arm64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            node_arch: arm64
+    runs-on: ${{ matrix.runner }}
+    env:
+      # TARGET_ARCH：fnpack 官方二进制后缀与 fpk 产物命名（amd64/arm64）
+      TARGET_ARCH: ${{ matrix.arch }}
+      # NODE_ARCH：npm 原生模块预编译产物目录名（x64/arm64）
+      NODE_ARCH: ${{ matrix.node_arch }}
+    steps:
+      - name: Checkout 本仓库（应用壳）
+        uses: actions/checkout@v4
+
+      - name: Checkout 上游 deepseek-harness
+        uses: actions/checkout@v4
+        with:
+          repository: deepseek-ai/deepseek-harness
+          ref: ${{ inputs.upstream_ref || 'master' }}
+          path: upstream
+          fetch-depth: 1
+
+      - name: 读取上游版本号
+        id: ver
+        env:
+          # 应用侧补丁版本后缀（仅手动触发时提供，如 .1 → 0.2.1-alpha.4.1）
+          VERSION_SUFFIX: ${{ inputs.version_suffix || '' }}
+        run: |
+          DSH_VERSION=$(node -p "require('./upstream/package.json').version")
+          DSH_VERSION="${DSH_VERSION}${VERSION_SUFFIX}"
+          echo "version=${DSH_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "上游版本: ${DSH_VERSION}（目标架构: ${TARGET_ARCH}）"
+
+      - name: 查询是否需要构建
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DSH_VERSION: ${{ steps.ver.outputs.version }}
+          EVENT: ${{ github.event_name }}
+          FORCE: ${{ inputs.force_release || 'false' }}
+        run: |
+          # 仅定时任务做"版本未变则跳过"检查；
+          # push / 手动触发永远构建 —— 应用代码可能变了（如打包修复），
+          # 需要重新出包并覆盖更新已有 Release
+          if [ "${EVENT}" = "schedule" ] && [ "${FORCE}" != "true" ]; then
+            if gh release view "dsh-${DSH_VERSION}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              echo "定时任务：版本 v${DSH_VERSION} 已发布过，跳过构建"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: 安装 Node.js 24
+        if: steps.check.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: 安装 pnpm
+        if: steps.check.outputs.skip != 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          # 用 pnpm 11：与上游 packageManager 声明一致，仅用于构建上游 monorepo；
+          # 应用壳内的依赖安装由 assemble.sh 用 npm 完成（扁平布局，规避软链问题）
+          version: 11
+
+      - name: 安装上游依赖并构建
+        if: steps.check.outputs.skip != 'true'
+        working-directory: upstream
+        run: |
+          echo "=== [A] pnpm install 上游开始（${TARGET_ARCH}） ==="
+          pnpm install
+          echo "=== [A] pnpm install 上游完成 ==="
+          echo "=== [B] pnpm run build 开始（内存最大 6GB） ==="
+          NODE_OPTIONS="--max-old-space-size=6144" pnpm run build
+          echo "=== [B] pnpm run build 完成 ==="
+
+      - name: pack 上游 dsh 包为 tgz
+        if: steps.check.outputs.skip != 'true'
+        working-directory: upstream
+        run: |
+          echo "=== [C] pack tgz 开始 ==="
+          mkdir -p ../tgz
+          pnpm --filter @deepseek-ai/dsh pack --pack-destination ../tgz
+          DSH_TGZ="${GITHUB_WORKSPACE}/tgz/$(ls ../tgz | head -1)"
+          echo "DSH_TGZ=${DSH_TGZ}" >> "$GITHUB_ENV"
+          # 上游偶发引用尚未发布到 npm 的包（新 experimental 包常滞后发布）。
+          # npm install 处理 file: tgz 时会解析 tgz 内部的 dependencies，
+          # 因此必须在 tgz 内剔除这些包，否则安装必然 E404。
+          # 做法：解开 tgz → 从 package.json 剔除 npm 上不存在的依赖 → 重新打包。
+          # 注意：GITHUB_ENV 只对后续步骤生效，本步骤内须以参数显式传路径。
+          # node - 从 stdin 读脚本（heredoc），tgz 路径经 argv[1] 传入。
+          node - "$DSH_TGZ" <<'EOF'
+          const { execSync } = require('child_process');
+          const fs = require('fs');
+          const os = require('os');
+          const path = require('path');
+          const tgz = process.argv.find((a) => a.endsWith('.tgz'));
+          const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tgz-fix-'));
+          // 解出全部内容（此前只解 package.json，重打包会把其余文件全部丢失）
+          execSync(`tar -xzf ${tgz} -C ${tmp}`);
+          const manifestPath = path.join(tmp, 'package', 'package.json');
+          const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+          const removed = [];
+          for (const field of ['dependencies', 'optionalDependencies']) {
+            const deps = manifest[field];
+            if (!deps) continue;
+            for (const [name] of Object.entries(deps)) {
+              if (name.startsWith('file:')) continue;
+              try { execSync(`npm view ${name} version`, { stdio: 'ignore' }); }
+              catch { removed.push(name); delete deps[name]; }
+            }
+          }
+          // 保险：npm view 网络故障会把可用依赖误判为不存在。
+          // 若"全部依赖"都被剔除，几乎必然是网络问题而非上游问题，
+          // 此时保持 tgz 原样，让后续 npm install 的 404 容错去处理。
+          const totalDeps = Object.keys(manifest.dependencies ?? {}).length
+            + Object.keys(manifest.optionalDependencies ?? {}).length;
+          if (removed.length > 0 && removed.length < totalDeps) {
+            fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+            execSync(`tar -czf ${tgz} -C ${tmp} package`);
+            console.log('已从 tgz 剔除 npm 上不存在的依赖:', removed.join(', '));
+          } else {
+            console.log('tgz 依赖全部可用，无需剔除');
+          }
+          fs.rmSync(tmp, { recursive: true, force: true });
+          EOF
+          echo "=== [C] pack tgz 完成: $(ls -la ../tgz) ==="
+
+      - name: 安装 fnpack（飞牛官方打包工具，按架构取二进制）
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          # 官方静态分发地址（直接是二进制，非 zip）：
+          #   amd64 → https://static2.fnnas.com/fnpack/fnpack-1.2.1-linux-amd64
+          #   arm64 → https://static2.fnnas.com/fnpack/fnpack-1.2.1-linux-arm64
+          # 注意：官方命名用 amd64 而非 x64，与 TARGET_ARCH 取值一致
+          FNPACK_URL="https://static2.fnnas.com/fnpack/fnpack-1.2.1-linux-${TARGET_ARCH}"
+          echo "下载 fnpack: ${FNPACK_URL}"
+          curl -sfL --retry 3 -o /tmp/fnpack "${FNPACK_URL}"
+          chmod +x /tmp/fnpack
+          sudo mv /tmp/fnpack /usr/local/bin/fnpack
+          # fnpack 1.2.1 不支持 --version（报 unknown flag），不做版本探测；
+          # 工具可用性由后续 fnpack build 步骤验证。
+
+      - name: 组装 fnOS 应用目录
+        if: steps.check.outputs.skip != 'true'
+        env:
+          DSH_VERSION: ${{ steps.ver.outputs.version }}
+          DSH_TGZ: ${{ env.DSH_TGZ }}
+          # TARGET_ARCH/NODE_ARCH 已在 job 级 env 定义，assemble.sh 读取 TARGET_ARCH
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          STAGE_DIR="${GITHUB_WORKSPACE}/stage" \
+          UPSTREAM_DIR="${GITHUB_WORKSPACE}/upstream" \
+          DSH_TGZ="${DSH_TGZ}" \
+            bash scripts/assemble-dsh.sh
+
+      - name: 调试快照（始终执行，便于远程诊断）
+        if: always()
+        run: |
+          {
+            echo "== stage/DSH 顶层 =="; ls -la stage/DSH/ 2>/dev/null
+            echo "== app 顶层 =="; ls -la stage/DSH/app/ 2>/dev/null
+            echo "== dsh 本体 =="; ls stage/DSH/app/node_modules/@deepseek-ai/dsh/lib/bin.js 2>/dev/null
+            echo "== 软链数量 =="; find stage/DSH -type l 2>/dev/null | wc -l
+            echo "== .node 产物分布 =="; find stage/DSH -name "*.node" 2>/dev/null | grep -oE '(linux|darwin|win32)-(x64|arm64)[^/]*' | sort | uniq -c
+          } > debug-snapshot.txt 2>&1 || true
+          cat debug-snapshot.txt
+
+      - name: 校验包体（目标架构原生产物齐全）
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          # CI 上按目标架构原生安装：必须有 linux-${NODE_ARCH} 产物；
+          # 除 node-pty 自带的全平台 prebuilds 外，不得混入另一架构的产物
+          if ! find stage/DSH -name "*.node" -path "*linux-${NODE_ARCH}*" | grep -q .; then
+            echo "::error::未找到 linux-${NODE_ARCH} 原生模块，${TARGET_ARCH} NAS 无法运行"
+            exit 1
+          fi
+          if [ "${NODE_ARCH}" = "x64" ]; then OTHER_ARCH=arm64; else OTHER_ARCH=x64; fi
+          if find stage/DSH -name "*.node" -path "*linux-${OTHER_ARCH}*" | grep -v "node-pty" | grep -q .; then
+            echo "::error::包内混入 linux-${OTHER_ARCH} 原生模块（运行器架构不对？）"
+            find stage/DSH -name "*.node" -path "*linux-${OTHER_ARCH}*" | grep -v node-pty
+            exit 1
+          fi
+          echo "✓ 包体校验通过（linux-${NODE_ARCH} 产物齐全，${TARGET_ARCH}）"
+
+      - name: fnpack 打包
+        if: steps.check.outputs.skip != 'true'
+        working-directory: stage/DSH
+        env:
+          DSH_VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          if ! command -v fnpack >/dev/null 2>&1; then
+            echo "::error::fnpack 不可用，请检查下载地址"
+            exit 1
+          fi
+          fnpack build
+          FPK=$(ls *.fpk | head -1)
+          # 产物名带架构与版本号，如 DSH_v0.1.7-rc.2_amd64.fpk
+          mv "${FPK}" "${GITHUB_WORKSPACE}/DSH_v${DSH_VERSION}_${TARGET_ARCH}.fpk"
+
+      - name: 上传构建产物 artifact
+        if: steps.check.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: DSH_v${{ steps.ver.outputs.version }}_${{ matrix.arch }}
+          path: DSH_v${{ steps.ver.outputs.version }}_${{ matrix.arch }}.fpk
+
+  release:
+    name: 发布 Release（双架构汇总）
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: 汇总双架构产物
+        id: collect
+        # 定时任务且上游版本未变化时无产物可下载，不视为失败
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: DSH_v*
+          merge-multiple: true
+          path: dist
+
+      - name: 检查产物
+        id: guard
+        run: |
+          COUNT=$(ls dist/*.fpk 2>/dev/null | wc -l)
+          echo "待发布 fpk 数量: ${COUNT}"
+          echo "count=${COUNT}" >> "$GITHUB_OUTPUT"
+
+      - name: 解析版本号
+        if: steps.guard.outputs.count != '0'
+        id: ver
+        run: |
+          NAME=$(basename "$(ls dist/*.fpk | head -1)")
+          VERSION=$(echo "${NAME}" | sed -E 's/^DSH_v(.*)_(amd64|arm64)\.fpk$/\1/')
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "DSH 版本: ${VERSION}"
+
+      - name: 发布 GitHub Release
+        if: steps.guard.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DSH_VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          # Release 说明（幂等：每次发布都重新生成）
+          # heredoc 未加引号：${DSH_VERSION} 由环境变量展开
+          cat > release-notes.md <<NOTES
+          DeepSeek Harness v${DSH_VERSION} 飞牛 fnOS 自动构建版（GitHub Actions 双架构原生构建）。
+
+          **按 NAS 架构下载**：
+          - x86_64（AMD/Intel，绝大多数 NAS 与虚拟机）→ DSH_v${DSH_VERSION}_amd64.fpk
+          - ARM64 → DSH_v${DSH_VERSION}_arm64.fpk
+
+          **更新内容见上游**: https://github.com/deepseek-ai/deepseek-harness
+
+          **安装/升级方式**:
+          1. 下载与 NAS 架构对应的 fpk
+          2. 飞牛应用中心 → 手动安装 → 上传该文件（已安装则覆盖升级）
+          3. 安装向导中确认服务端口（默认 3082）
+          4. 依赖：应用中心需已安装 nodejs_v24 运行时
+
+          **访问方式**: 飞牛桌面点 DSH 卡片，或浏览器打开 http://NAS地址:3082
+          NOTES
+          # tag 已存在则更新资产与说明，否则创建
+          if gh release view "dsh-${DSH_VERSION}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release v${DSH_VERSION} 已存在，更新资产"
+            gh release upload "dsh-${DSH_VERSION}" --repo "$GITHUB_REPOSITORY" --clobber dist/*.fpk
+            gh release edit "dsh-${DSH_VERSION}" --repo "$GITHUB_REPOSITORY" --notes-file release-notes.md
+          else
+            gh release create "dsh-${DSH_VERSION}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "DSH v${DSH_VERSION}" \
+              --notes-file release-notes.md \
+              dist/*.fpk
+          fi
+
+      - name: 清理旧版本 Release（只保留最新 KEEP_N 个）
+        if: steps.guard.outputs.count != '0'
+        # 清理失败不影响"新版已发布"这个事实，不让整个发布任务变红
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEEP_TAG: dsh-${{ steps.ver.outputs.version }}
+          KEEP_N: "1"
+        run: |
+          # 每个版本 250~320MB（双架构），长期堆积很占空间：发布成功后删掉旧版本。
+          # 排序按创建时间倒序，保留最新 KEEP_N 个；KEEP_TAG（本次刚发的）永远保留，
+          # 这样手动构建旧版本时也不会误删更新的版本。
+          ASSETS=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$KEEP_TAG" --jq '.assets | length' 2>/dev/null || echo 0)
+          if [ "${ASSETS:-0}" -lt 1 ]; then
+            echo "本次发布的 Release 没有资产，跳过旧版本清理"
+            exit 0
+          fi
+          mapfile -t ROWS < <(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq 'sort_by(.created_at) | reverse | .[] | "\(.tag_name) \(.id)"')
+          echo "现有 ${#ROWS[@]} 个 Release，保留 ${KEEP_N} 个 + $KEEP_TAG"
+          i=0
+          for row in "${ROWS[@]}"; do
+            tag="${row%% *}"
+            i=$((i + 1))
+            if [ "$tag" = "$KEEP_TAG" ] || [ "$i" -le "$KEEP_N" ]; then
+              echo "保留 $tag"
+              continue
+            fi
+            echo "删除旧版本 Release: $tag"
+            gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
+          done
+
+  # -----------------------------------------------------------
+  # 收尾：同步索引（下载地址指向本源、清理旧版、重建 fnpack.json）
+  # -----------------------------------------------------------
+  sync:
+    needs: [release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 同步索引并指向本源地址
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          node scripts/sync-dsh.mjs
+          node scripts/mirror-dsh.mjs
+          node scripts/prune-releases.mjs --slug dsh
+          node scripts/update-index.mjs --repo "${REPO}"
+      - name: 提交索引变更
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "索引无变化，无需提交"
+          else
+            git add -A apps build fnpack.json README.md assets
+            git commit -m "chore: DSH 已由本仓库从上游构建，索引指向本源 [skip ci]"
+            git push
+          fi

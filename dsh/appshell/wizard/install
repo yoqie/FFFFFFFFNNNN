@@ -1,0 +1,11 @@
+[
+  {
+    "stepTitle": "DSH 服务配置",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "DSH 通过固定端口 3082 提供 Web 服务，飞牛桌面点击 DSH 图标即可打开。官方 deepseek-harness 应用使用 3080，与本应用互不冲突、可以共存；若 3082 被其他应用占用，请先停用占用方，或在应用安装后修改 manifest 与 ui/config 中的端口。"
+      }
+    ]
+  }
+]

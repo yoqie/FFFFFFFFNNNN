@@ -16,7 +16,7 @@
     "0.2.1-alpha.5.2": {
       "version": "0.2.1-alpha.5.2",
       "release_note": "DSH v0.2.1-alpha.5.2 飞牛 fnOS 自动构建（arm/x86），更新内容见上游 deepseek-ai/deepseek-harness。",
-      "updated_at": "2026-10-16T13:28:17Z",
+      "updated_at": "2026-10-16T13:50:42Z",
       "packages": {
         "x86": {
           "version": "0.2.1-alpha.5.2",
@@ -33,5 +33,5 @@
       }
     }
   },
-  "updated_at": "2026-10-17T11:26:58.927Z"
+  "updated_at": "2026-10-17T12:36:01.630Z"
 }
