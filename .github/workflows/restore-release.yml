@@ -1,0 +1,75 @@
+name: restore-release
+
+# 从历史构建运行的产物（artifact）原样重建某个 Release。
+# 用途：万一某个应用的 Release 被误删，用它把当时的 fpk 原封不动放回去——
+# 文件与原版完全一致，索引里的 sha256/大小无需改动，用户也不用重新下载。
+#
+# 用法示例（重建 1panel-2.3.2-2，产物来自 run 38728289055）：
+#   tag:    1panel-2.3.2-2
+#   run_id: 38728289055
+#   assets: 1panel_2.3.2-2_x86.fpk=1panel_2.3.2-2_x86.fpk,1panel_2.3.2-2_arm.fpk=1panel_2.3.2-2_arm.fpk
+#   title:  1Panel 2.3.2-2
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "要重建的 Release tag（如 1panel-2.3.2-2）"
+        required: true
+      run_id:
+        description: "产物所在的 Actions run id"
+        required: true
+      assets:
+        description: "资产映射，源文件名=目标资产名，逗号分隔"
+        required: true
+      title:
+        description: "Release 标题（留空=用 tag）"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 下载历史构建产物
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+          path: dl
+
+      - name: 按原始文件名发布为 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          MAP: ${{ inputs.assets }}
+          TITLE: ${{ inputs.title }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          IFS=',' read -ra PAIRS <<< "${MAP}"
+          for pair in "${PAIRS[@]}"; do
+            src="${pair%%=*}"
+            dst="${pair##*=}"
+            f="$(find dl -name "${src}" -type f | head -1)"
+            if [ -z "${f}" ]; then
+              echo "::error::产物中找不到 ${src}"
+              ls -R dl | head -40
+              exit 1
+            fi
+            cp "${f}" "out/${dst}"
+            echo "${dst} ← ${f}（$(stat -c%s "${f}") 字节，sha256=$(sha256sum "${f}" | cut -c1-24)…）"
+          done
+          if gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "Release ${TAG} 已存在，补传资产"
+            gh release upload "${TAG}" --repo "${GITHUB_REPOSITORY}" --clobber out/*
+          else
+            gh release create "${TAG}" --repo "${GITHUB_REPOSITORY}" \
+              --title "${TITLE:-$TAG}" \
+              --notes "由本源 FFFFFFFFFNNN 从历史构建产物原样重建（文件与首发版本完全一致）。" \
+              out/*
+          fi
+          echo "重建完成：${TAG}"
