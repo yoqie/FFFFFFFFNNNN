@@ -62,13 +62,19 @@ jobs:
           REF="${IN_REF:-${LATEST_TAG}}"
           [ -n "${REF}" ] || { echo "::error::拿不到上游 tag，请手动指定 upstream_ref"; exit 1; }
 
-          # 版本号优先取上游源码声明的 <Version>（最准），退化到 tag 去掉 v
+          # 版本号以上游 Release tag 为准：实测上游 src/Router.Contracts/Router.Contracts.csproj
+          # 的 <Version> 并不随发版更新（tag v2.0.9 里仍写着 2.0.0），照它构建会产出错版本。
+          # tag 不像版本号时（如 upstream_ref 指到分支），才退回读 csproj。
           VERSION="${IN_VERSION}"
+          TAGVER="$(printf '%s' "${REF}" | sed -E 's/^v//')"
           if [ -z "${VERSION}" ]; then
-            VERSION=$(curl -sfL "https://raw.githubusercontent.com/NNNNolan/Router2API/${REF}/src/Router.Contracts/Router.Contracts.csproj" \
-              | grep -oPm1 '(?<=<Version>)[^<]+' || true)
+            case "${TAGVER}" in
+              [0-9]*) VERSION="${TAGVER}" ;;
+              *) VERSION=$(curl -sfL "https://raw.githubusercontent.com/NNNNolan/Router2API/${REF}/src/Router.Contracts/Router.Contracts.csproj" \
+                   | grep -oPm1 '(?<=<Version>)[^<]+' || true) ;;
+            esac
           fi
-          [ -n "${VERSION}" ] || VERSION="$(printf '%s' "${REF}" | sed -E 's/^v//')"
+          [ -n "${VERSION}" ] || VERSION="${TAGVER}"
           VERSION="${VERSION#v}"
 
           # 本源已经有这个版本（tag Router2API-<版本>）就不重复构建
