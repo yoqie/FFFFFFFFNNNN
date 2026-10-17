@@ -38,8 +38,9 @@ on:
         required: false
         default: ""
   schedule:
-    # 每天 UTC 20:30（北京次日 04:30）检查上游；晚于打包方(20:00)、早于索引同步(21:00)
-    - cron: "30 20 * * *"
+    # 每小时的第 30 分检查一次上游是否有新 Release；有新版才构建，
+    # 没有新版时整个流程几秒钟就跳过（先查 dsh-<版本> 是否已发布），不浪费 CI
+    - cron: "30 * * * *"
 
 permissions:
   contents: write
@@ -70,11 +71,29 @@ jobs:
       - name: Checkout 本仓库（应用壳）
         uses: actions/checkout@v4
 
+      - name: 选定上游 ref（默认取最新 Release tag）
+        id: pick
+        if: ${{ !inputs.upstream_ref }}
+        run: |
+          # 取上游最新一个非草稿 Release 的 tag（按发布时间倒序，含预发布版，
+          # 与"跟随上游发布"一致）；拿不到时退回 master 分支。
+          # 这样每小时检查也不会把 master 上未发布的提交当成新版本打进源里。
+          REF=$(curl -s -H "Authorization: Bearer ${{ github.token }}" \
+            "https://api.github.com/repos/deepseek-ai/deepseek-harness/releases?per_page=20" \
+            | python3 -c "
+          import json,sys
+          rels=[r for r in json.load(sys.stdin) if not r.get('draft')]
+          print(rels[0]['tag_name'] if rels else '')
+          ")
+          [ -n "${REF}" ] || REF=master
+          echo "选定上游 ref: ${REF}"
+          echo "ref=${REF}" >> "$GITHUB_OUTPUT"
+
       - name: Checkout 上游 deepseek-harness
         uses: actions/checkout@v4
         with:
           repository: deepseek-ai/deepseek-harness
-          ref: ${{ inputs.upstream_ref || 'master' }}
+          ref: ${{ inputs.upstream_ref || steps.pick.outputs.ref }}
           path: upstream
           fetch-depth: 1
 
