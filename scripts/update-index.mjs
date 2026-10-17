@@ -18,8 +18,16 @@ const REPO = opt('--repo', process.env.REPO || 'yoqie/FnDepot');
 const readJson = async (p, d) => JSON.parse(await fs.readFile(p, 'utf8').catch(() => JSON.stringify(d)));
 const writeJson = (p, o) => fs.writeFile(p, JSON.stringify(o, null, 2) + '\n');
 
+// 详情文件里最新一条 release 的时间：detail.updated_at 缺失时（例如 1panel）用它兜底，
+// 它只随内容变化，不会被"现在几点"污染。
+const latestReleaseTime = (detail) => Object.values(detail.releases || {})
+  .map((r) => r.updated_at).filter(Boolean).sort().pop() || '';
+
 const sourceInfo = await readJson(path.join(ROOT, 'source.json'), {});
 const fnpack = { schema_version: '2', source_info: sourceInfo, apps: {} };
+// 上一次生成的索引：details_updated_at 拿不到新信息时沿用旧值，避免每次运行都刷新成
+// "现在"，让定时任务白白提交一条只改时间戳的改动。
+const prevFnpack = await readJson(path.join(ROOT, 'fnpack.json'), { apps: {} });
 
 const allowlist = (await fs.readFile(path.join(ROOT, 'apps.allowlist.txt'), 'utf8').catch(() => ''))
   .split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
@@ -41,7 +49,7 @@ for (const slug of allSlugs) {
     )].sort();
     fnpack.apps[slug] = {
       details_url: `apps/${slug}.json`,
-      details_updated_at: detail.updated_at || new Date().toISOString(),
+      details_updated_at: detail.updated_at || latestReleaseTime(detail) || prevFnpack.apps?.[slug]?.details_updated_at || new Date().toISOString(),
       display_name: detail.display_name || meta.displayName,
       desc: detail.desc || desc,
       platform: platforms.length ? platforms : (isDocker ? ['all'] : ['x86', 'arm']),
