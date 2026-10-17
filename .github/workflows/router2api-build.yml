@@ -244,5 +244,7 @@ jobs:
           else
             git add -A apps build fnpack.json README.md assets
             git commit -m "chore: Router2API ${{ needs.prepare.outputs.version }} 已由本仓库构建，索引指向本源 [skip ci]"
+            # 与本仓库其它提交/工作流并发时，先变基再推送
+            git pull --rebase --autostash || true
             git push
           fi
