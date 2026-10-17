@@ -334,37 +334,9 @@ jobs:
               dist/*.fpk
           fi
 
-      - name: 清理旧版本 Release（只保留最新 KEEP_N 个）
-        if: steps.guard.outputs.count != '0'
-        # 清理失败不影响"新版已发布"这个事实，不让整个发布任务变红
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          KEEP_TAG: dsh-${{ steps.ver.outputs.version }}
-          KEEP_N: "1"
-        run: |
-          # 每个版本 250~320MB（双架构），长期堆积很占空间：发布成功后删掉旧版本。
-          # 排序按创建时间倒序，保留最新 KEEP_N 个；KEEP_TAG（本次刚发的）永远保留，
-          # 这样手动构建旧版本时也不会误删更新的版本。
-          ASSETS=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$KEEP_TAG" --jq '.assets | length' 2>/dev/null || echo 0)
-          if [ "${ASSETS:-0}" -lt 1 ]; then
-            echo "本次发布的 Release 没有资产，跳过旧版本清理"
-            exit 0
-          fi
-          mapfile -t ROWS < <(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
-            --jq 'sort_by(.created_at) | reverse | .[] | "\(.tag_name) \(.id)"')
-          echo "现有 ${#ROWS[@]} 个 Release，保留 ${KEEP_N} 个 + $KEEP_TAG"
-          i=0
-          for row in "${ROWS[@]}"; do
-            tag="${row%% *}"
-            i=$((i + 1))
-            if [ "$tag" = "$KEEP_TAG" ] || [ "$i" -le "$KEEP_N" ]; then
-              echo "保留 $tag"
-              continue
-            fi
-            echo "删除旧版本 Release: $tag"
-            gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
-          done
+      # 注：旧版本清理交给下方 sync 任务里的 `prune-releases.mjs --slug dsh`，
+      #     它只处理 dsh- 前缀的 Release，绝不会碰 1panel / Router2API 的产物。
+      #     （原步骤会遍历全仓库 Release 只留最新 N 个，曾误删另外两个应用的产物，已移除）
 
   # -----------------------------------------------------------
   # 收尾：同步索引（下载地址指向本源、清理旧版、重建 fnpack.json）
