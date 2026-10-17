@@ -33,7 +33,7 @@ const SLUG = 'dsh';
 // 最后一项是本仓库自己从上游 deepseek-ai/deepseek-harness 构建发布的 fpk
 // （tag 形如 dsh-0.2.1-rc.2），优先级最高：自己出过包就用自己那份。
 const UPSTREAM_REPOS = (process.env.DSH_UPSTREAM_REPO
-  || `cliii-one/DSH_FNOS,yoqie/DSH_FNOS,${REPO}`)
+  || REPO)
   .split(',').map((s) => s.trim()).filter(Boolean);
 
 // —— 最上游作者（固定写死）——
@@ -124,14 +124,23 @@ async function sha256Of(url) {
 async function fetchAllReleases() {
   const all = [];
   for (const repo of UPSTREAM_REPOS) {
-    for (let page = 1; ; page += 1) {
-      const rels = await ghJson(`https://api.github.com/repos/${repo}/releases?per_page=100&page=${page}`);
+    // 仓库不存在/已删除时只跳过它，不要让整条同步链失败
+    try {
+      for (let page = 1; ; page += 1) {
+        const rels = await ghJson(`https://api.github.com/repos/${repo}/releases?per_page=100&page=${page}`);
       for (const r of rels) {
         // 本仓库里还挂着 1panel / Router2API 的 Release，只认 dsh-<版本> 这种 tag
         if (repo === REPO && !String(r.tag_name).startsWith(`${SLUG}-`)) continue;
         all.push({ ...r, __repo: repo });
       }
-      if (!Array.isArray(rels) || rels.length < 100) break;
+        if (!Array.isArray(rels) || rels.length < 100) break;
+      }
+    } catch (e) {
+      if (/HTTP 404/.test(e.message)) {
+        console.log(`跳过不存在的上游仓库：${repo}`);
+        continue;
+      }
+      throw e;
     }
   }
   return all.filter((r) => !r.draft);

@@ -39,7 +39,7 @@ const SLUG = 'Router2API';
 // 最后一项是本仓库自己构建发布的 fpk（tag 形如 Router2API-2.0.9），优先级最高：
 // 只要本仓库自己出过包，索引就用自己那份，不再依赖第三方打包方是否跟上上游。
 const UPSTREAM_REPOS = (process.env.ROUTER2API_UPSTREAM_REPO
-  || `cliii-one/Router2API,yoqie/Router2API,${REPO}`)
+  || REPO)
   .split(',').map((s) => s.trim()).filter(Boolean);
 
 // —— 最上游作者（固定写死，不被上游 manifest 的打包者署名覆盖）——
