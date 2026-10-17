@@ -13,25 +13,25 @@
   "is_docker": false,
   "service_port": "5242",
   "releases": {
-    "2.0.9": {
-      "version": "2.0.9",
-      "release_note": "Router2API v2.0.9 飞牛 fnOS 原生包（arm/x86），由本源从上游 NNNNolan 的最新源码自动构建。",
-      "updated_at": "2026-10-17T13:20:13Z",
+    "2.0.9.1": {
+      "version": "2.0.9.1",
+      "release_note": "Router2API v2.0.9.1 飞牛 fnOS 原生包（arm/x86），由本源从上游 NNNNolan 的最新源码自动构建。",
+      "updated_at": "2026-10-17T14:16:35Z",
       "packages": {
         "x86": {
-          "version": "2.0.9",
-          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/Router2API-2.0.9/Router2API_v2.0.9_amd64.fpk",
-          "sha256": "1c0b54abeec8b237f597900d32b80e8daa0f2cfe6712fcb340a436f0cf773184",
-          "size": 71452790
+          "version": "2.0.9.1",
+          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/Router2API-2.0.9.1/Router2API_v2.0.9.1_amd64.fpk",
+          "sha256": "8f397ad14e9c2db1b4edf54733e0b46c9bcbb69de589e0c861b89718b2bf965e",
+          "size": 71455436
         },
         "arm": {
-          "version": "2.0.9",
-          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/Router2API-2.0.9/Router2API_v2.0.9_arm64.fpk",
-          "sha256": "6234db305895337cec81c32bf9cf232d91d7b97fde439daba198fa84ce5b3ab8",
-          "size": 68728225
+          "version": "2.0.9.1",
+          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/Router2API-2.0.9.1/Router2API_v2.0.9.1_arm64.fpk",
+          "sha256": "59fd37545180656f6228d2fd3f4939e9b58c9f928defc779209d487d24359353",
+          "size": 68727395
         }
       }
     }
   },
-  "updated_at": "2026-10-17T14:04:03.724Z"
+  "updated_at": "2026-10-17T14:16:45.514Z"
 }
