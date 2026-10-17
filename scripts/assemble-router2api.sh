@@ -97,6 +97,11 @@ pushd "${UPSTREAM_DIR}" >/dev/null
 # TreatWarningsAsErrors=false：上游把警告当错误，用于约束自己的代码质量。
 # 作为打包方，不该因为上游新增的一条分析器警告就整体构建失败，
 # 代码质量由上游自己的 CI 把关，这里只关心能否产出可运行的程序。
+#
+# -p:Version：程序集版本以发布版本（Release tag）为准。上游的 csproj <Version>
+# 经常忘记跟着发版改——例如 v2.0.9 标签下 Router.Host.csproj 写的还是 2.0.8、
+# Router.Contracts.csproj 写的是 2.0.0，不覆盖就会让界面/接口显示错误的版本号。
+# IncludeSourceRevisionInInformationalVersion=false：否则版本号会带上 +<commit> 尾巴。
 dotnet publish src/Router.Host/Router.Host.csproj \
     -c Release \
     -r "${DOTNET_RID}" \
@@ -105,7 +110,9 @@ dotnet publish src/Router.Host/Router.Host.csproj \
     -p:PublishSingleFile=false \
     -p:DebugType=none \
     -p:TreatWarningsAsErrors=false \
-    -p:GenerateDocumentationFile=false
+    -p:GenerateDocumentationFile=false \
+    -p:Version="${R2A_VERSION}" \
+    -p:IncludeSourceRevisionInInformationalVersion=false
 popd >/dev/null
 
 # 自包含产物：优先 apphost（Router.Host 可执行文件），确保有执行权限
