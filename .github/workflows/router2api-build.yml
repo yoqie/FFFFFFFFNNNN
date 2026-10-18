@@ -90,7 +90,8 @@ jobs:
           # 上游这个版本已经打包过（记录在 build/Router2API/meta.json）就不重复构建
           SKIP="false"
           if [ "${FORCE}" != "true" ]; then
-            PACKED=$(node -p "try{require('./build/Router2API/meta.json').version}catch(e){''}" 2>/dev/null || true)
+            # 记录的是"已打包的上游版本"（不是发布版本），见 sync 作业里的写入步骤
+            PACKED=$(cat build/Router2API/packed-upstream.txt 2>/dev/null || true)
             [ -n "${PACKED}" ] && [ "${PACKED}" = "${UPSTREAM_VERSION}" ] && SKIP="true"
           fi
 
@@ -251,6 +252,12 @@ jobs:
           node scripts/mirror-router2api.mjs
           node scripts/prune-releases.mjs --slug Router2API
           node scripts/update-index.mjs --repo "${REPO}"
+          # 记下"上游哪个版本已被打包"，供下次定时任务判断是否需要构建。
+          # 不能直接用 build/Router2API/meta.json 的 version —— 那是发布版本
+          # （可能带递增数字尾，如 2.0.9.1），与上游版本不是一回事。
+          mkdir -p build/Router2API
+          printf '%s\n' "${{ needs.prepare.outputs.upstream }}" > build/Router2API/packed-upstream.txt
+          echo "已打包上游版本：$(cat build/Router2API/packed-upstream.txt)"
 
       - name: 提交索引变更
         run: |

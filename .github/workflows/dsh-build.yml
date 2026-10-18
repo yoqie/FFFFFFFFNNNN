@@ -48,6 +48,9 @@ permissions:
 jobs:
   build:
     name: 构建并打包（${{ matrix.arch }}）
+    outputs:
+      # 上游版本（两架构算出的值相同），供 release/sync 记录"已打包的上游版本"
+      upstream: ${{ steps.ver.outputs.upstream }}
     strategy:
       # 一个架构失败不取消另一个，便于定位单侧问题
       fail-fast: false
@@ -126,7 +129,8 @@ jobs:
           # 已打包上游版本；手动触发 / force 永远构建——此时 next-version.mjs 会递增
           # 发布版本，用户才能收到这次更新（例如打包修复后重发）
           if [ "${EVENT}" = "schedule" ] && [ "${FORCE}" != "true" ]; then
-            PACKED=$(node -p "try{require('./build/dsh/meta.json').version}catch(e){''}" 2>/dev/null || true)
+            # 记录的是"已打包的上游版本"（不是发布版本），见 sync 作业里的写入步骤
+            PACKED=$(cat build/dsh/packed-upstream.txt 2>/dev/null || true)
             if [ -n "${PACKED}" ] && [ "${PACKED}" = "${DSH_UPSTREAM_VERSION}" ]; then
               echo "定时任务：上游 ${DSH_UPSTREAM_VERSION} 已经打包过，跳过构建"
               echo "skip=true" >> "$GITHUB_OUTPUT"
@@ -295,6 +299,8 @@ jobs:
     name: 发布 Release（双架构汇总）
     needs: build
     runs-on: ubuntu-24.04
+    outputs:
+      upstream: ${{ steps.ver.outputs.upstream }}
     steps:
       - name: 汇总双架构产物
         id: collect
@@ -320,7 +326,11 @@ jobs:
           NAME=$(basename "$(ls dist/*.fpk | head -1)")
           VERSION=$(echo "${NAME}" | sed -E 's/^DSH_v(.*)_(amd64|arm64)\.fpk$/\1/')
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "DSH 版本: ${VERSION}"
+          # 上游版本：优先用 build 作业算出的；拿不到时退回发布版本（无递增尾时二者相同）
+          UP="${{ needs.build.outputs.upstream }}"
+          [ -n "${UP}" ] || UP="${VERSION}"
+          echo "upstream=${UP}" >> "$GITHUB_OUTPUT"
+          echo "DSH 版本: ${VERSION}（上游 ${UP}）"
 
       - name: 发布 GitHub Release
         if: steps.guard.outputs.count != '0'
@@ -382,6 +392,12 @@ jobs:
           node scripts/mirror-dsh.mjs
           node scripts/prune-releases.mjs --slug dsh
           node scripts/update-index.mjs --repo "${REPO}"
+          # 记下"上游哪个版本已被打包"，供下次定时任务判断是否需要构建。
+          # 不能直接用 build/dsh/meta.json 的 version —— 那是发布版本
+          # （可能带递增数字尾，如 0.2.1.2.1），与上游版本不是一回事。
+          mkdir -p build/dsh
+          printf '%s\n' "${{ needs.release.outputs.upstream }}" > build/dsh/packed-upstream.txt
+          echo "已打包上游版本：$(cat build/dsh/packed-upstream.txt)"
       - name: 提交索引变更
         run: |
           set -euo pipefail
