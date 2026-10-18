@@ -110,9 +110,9 @@ jobs:
           # 上游版本（用于判断是否已打包过，以及人工追溯）
           DSH_UPSTREAM_VERSION=$(node -p "require('./upstream/package.json').version")
           DSH_UPSTREAM_VERSION="${DSH_UPSTREAM_VERSION}${VERSION_SUFFIX}"
-          # 发布版本：跟随上游，同时保证数字段单调递增，否则飞牛应用中心不会提示更新
-          # （它比较版本时忽略 alpha/rc 等字母段，见 scripts/next-version.mjs）
-          DSH_VERSION=$(node scripts/next-version.mjs --slug dsh --upstream-version "${DSH_UPSTREAM_VERSION}")
+          # 发布版本 = 上游版本，原样跟随（如 0.2.1-rc.2），不作任何改写。
+          # 这样版本号与应用中心显示的上游版本一致，便于对照。
+          DSH_VERSION="${DSH_UPSTREAM_VERSION}"
           echo "version=${DSH_VERSION}" >> "$GITHUB_OUTPUT"
           echo "upstream=${DSH_UPSTREAM_VERSION}" >> "$GITHUB_OUTPUT"
           echo "上游版本: ${DSH_UPSTREAM_VERSION} → 发布版本: ${DSH_VERSION}（目标架构: ${TARGET_ARCH}）"
@@ -125,9 +125,8 @@ jobs:
           EVENT: ${{ github.event_name }}
           FORCE: ${{ inputs.force_release || 'false' }}
         run: |
-          # 仅定时任务做"上游没变就跳过"检查，依据是 build/dsh/meta.json 里记录的
-          # 已打包上游版本；手动触发 / force 永远构建——此时 next-version.mjs 会递增
-          # 发布版本，用户才能收到这次更新（例如打包修复后重发）
+          # 仅定时任务做"上游没变就跳过"检查，依据是 build/dsh/packed-upstream.txt
+          # 记录的已打包上游版本；手动触发 / force 永远构建（便于打包修复后重发）
           if [ "${EVENT}" = "schedule" ] && [ "${FORCE}" != "true" ]; then
             # 记录的是"已打包的上游版本"（不是发布版本），见 sync 作业里的写入步骤
             PACKED=$(cat build/dsh/packed-upstream.txt 2>/dev/null || true)

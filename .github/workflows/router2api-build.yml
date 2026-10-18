@@ -43,7 +43,7 @@ jobs:
       ref: ${{ steps.ver.outputs.ref }}
       skip: ${{ steps.ver.outputs.skip }}
     steps:
-      # 需要 checkout 才能调用 scripts/next-version.mjs 计算发布版本
+      # 需要 checkout 才能读取 build/Router2API/packed-upstream.txt 判断是否已打包
       - uses: actions/checkout@v4
 
       - name: 解析目标版本
@@ -82,10 +82,8 @@ jobs:
           [ -n "${VERSION}" ] || VERSION="${TAGVER}"
           VERSION="${VERSION#v}"
 
-          # 发布版本：跟随上游，同时保证数字段单调递增，否则飞牛应用中心不会提示更新
-          # （它比较版本时忽略 alpha/rc 等字母段，见 scripts/next-version.mjs）
+          # 发布版本 = 上游版本，原样跟随（如 2.0.9），不作任何改写
           UPSTREAM_VERSION="${VERSION}"
-          VERSION=$(node scripts/next-version.mjs --slug Router2API --upstream-version "${UPSTREAM_VERSION}")
 
           # 上游这个版本已经打包过（记录在 build/Router2API/meta.json）就不重复构建
           SKIP="false"
