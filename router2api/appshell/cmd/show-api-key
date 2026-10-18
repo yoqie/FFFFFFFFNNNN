@@ -1,0 +1,76 @@
+#!/bin/sh
+# 显示 Router2API 当前的下游 API Key（用于把 Key 填进各种客户端）。
+#
+# 背景：管理后台的「配置中心 → 替换 API Key」只提供**替换**用途，
+# 已存在的 Key 不会回显明文（上游设计如此），所以需要一个本机取明文的方式。
+#
+# 用法（在 NAS 上以 root 执行）：
+#   sudo /var/apps/Router2API/cmd/show-api-key
+#   sudo /var/apps/Router2API/cmd/show-api-key --quiet   # 只输出 Key 本身，便于管道复制
+#
+# Key 存在应用数据目录的 Config/Config.json 的 Auth.ApiKey.Key 字段里，
+# 该文件权限 600、属主为应用用户，因此需要 root。
+
+set -eu
+
+QUIET=0
+[ "${1:-}" = "--quiet" ] && QUIET=1
+
+# 数据目录：优先用飞牛注入的 PKGVAR，否则按常见卷号兜底
+if [ -n "${TRIM_PKGVAR:-}" ] && [ -d "${TRIM_PKGVAR}" ]; then
+    PKGVAR="${TRIM_PKGVAR}"
+else
+    PKGVAR=""
+    for base in /vol*/@appdata/Router2API; do
+        [ -d "$base" ] && PKGVAR="$base" && break
+    done
+fi
+
+CFG="${PKGVAR:-/vol1/@appdata/Router2API}/Config/Config.json"
+
+if [ ! -f "${CFG}" ]; then
+    echo "找不到配置文件：${CFG}" >&2
+    echo "（应用可能尚未启动过；启动一次后会生成）" >&2
+    exit 1
+fi
+
+KEY=$(python3 - "$CFG" <<'PYEOF' 2>/dev/null
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as fh:
+        cfg = json.load(fh)
+    key = cfg.get("Auth", {}).get("ApiKey", {}).get("Key", "") or ""
+except Exception:
+    key = ""
+print(key)
+PYEOF
+)
+
+if [ -z "${KEY}" ]; then
+    echo "配置里没有 API Key（Auth.ApiKey.Key 为空）。" >&2
+    echo "可在管理后台「配置中心 → 替换 API Key」里设置一个，或重启应用自动生成。" >&2
+    exit 2
+fi
+
+if [ "${QUIET}" = "1" ]; then
+    printf '%s\n' "${KEY}"
+    exit 0
+fi
+
+ENABLED=$(python3 - "$CFG" <<'PYEOF' 2>/dev/null
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as fh:
+        cfg = json.load(fh)
+    print("已启用" if cfg.get("Auth", {}).get("ApiKey", {}).get("Enabled") else "已停用")
+except Exception:
+    print("未知")
+PYEOF
+)
+
+echo "Router2API 下游 API Key（状态：${ENABLED}）"
+echo "-----------------------------------------------"
+printf '%s\n' "${KEY}"
+echo "-----------------------------------------------"
+echo "配置文件：${CFG}"
+echo "客户端里把它填到 API Key / Authorization: Bearer <key> 处即可。"
