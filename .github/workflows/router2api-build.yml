@@ -256,8 +256,13 @@ jobs:
           # 不能直接用 build/Router2API/meta.json 的 version —— 那是发布版本
           # （可能带递增数字尾，如 2.0.9.1），与上游版本不是一回事。
           mkdir -p build/Router2API
-          printf '%s\n' "${{ needs.prepare.outputs.upstream }}" > build/Router2API/packed-upstream.txt
-          echo "已打包上游版本：$(cat build/Router2API/packed-upstream.txt)"
+          UP="${{ needs.prepare.outputs.upstream }}"
+          if [ -n "${UP}" ]; then
+            printf '%s\n' "${UP}" > build/Router2API/packed-upstream.txt
+            echo "已打包上游版本：${UP}"
+          else
+            echo "::warning::未取到上游版本，保留原值：$(cat build/Router2API/packed-upstream.txt 2>/dev/null)"
+          fi
 
       - name: 提交索引变更
         run: |

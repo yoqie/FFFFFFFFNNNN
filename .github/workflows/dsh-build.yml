@@ -288,19 +288,30 @@ jobs:
           # 产物名带架构与版本号，如 DSH_v0.1.7-rc.2_amd64.fpk
           mv "${FPK}" "${GITHUB_WORKSPACE}/DSH_v${DSH_VERSION}_${TARGET_ARCH}.fpk"
 
+      - name: 记录本次打包的上游版本（随产物上传，供 sync 作业读取）
+        if: steps.check.outputs.skip != 'true'
+        env:
+          # matrix 里各架构单独计算，但值相同；用 shell 变量避免表达式拼错
+          DSH_UP: ${{ steps.ver.outputs.upstream }}
+        run: |
+          printf '%s\n' "${DSH_UP}" > "packed-upstream-${{ matrix.arch }}.txt"
+          echo "上游版本记录：$(cat packed-upstream-${{ matrix.arch }}.txt)"
+
       - name: 上传构建产物 artifact
         if: steps.check.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: DSH_v${{ steps.ver.outputs.version }}_${{ matrix.arch }}
-          path: DSH_v${{ steps.ver.outputs.version }}_${{ matrix.arch }}.fpk
+          path: |
+            DSH_v${{ steps.ver.outputs.version }}_${{ matrix.arch }}.fpk
+            packed-upstream-${{ matrix.arch }}.txt
 
   release:
     name: 发布 Release（双架构汇总）
     needs: build
     runs-on: ubuntu-24.04
     outputs:
-      upstream: ${{ steps.ver.outputs.upstream }}
+      upstream: ${{ steps.meta.outputs.upstream }}
     steps:
       - name: 汇总双架构产物
         id: collect
@@ -311,6 +322,13 @@ jobs:
           pattern: DSH_v*
           merge-multiple: true
           path: dist
+
+      - name: 读取上游版本记录
+        id: meta
+        run: |
+          UP=$(cat dist/packed-upstream-*.txt 2>/dev/null | head -1 | tr -d '[:space:]')
+          echo "upstream=${UP}" >> "$GITHUB_OUTPUT"
+          echo "产物里的上游版本：${UP:-（无）}"
 
       - name: 检查产物
         id: guard
@@ -396,8 +414,14 @@ jobs:
           # 不能直接用 build/dsh/meta.json 的 version —— 那是发布版本
           # （可能带递增数字尾，如 0.2.1.2.1），与上游版本不是一回事。
           mkdir -p build/dsh
-          printf '%s\n' "${{ needs.release.outputs.upstream }}" > build/dsh/packed-upstream.txt
-          echo "已打包上游版本：$(cat build/dsh/packed-upstream.txt)"
+          UP="${{ needs.release.outputs.upstream }}"
+          if [ -n "${UP}" ]; then
+            printf '%s\n' "${UP}" > build/dsh/packed-upstream.txt
+            echo "已打包上游版本：${UP}"
+          else
+            # 拿不到就保留原值：清空会让下次定时任务误判为"没打包过"而重复构建
+            echo "::warning::未取到上游版本，保留原值：$(cat build/dsh/packed-upstream.txt 2>/dev/null)"
+          fi
       - name: 提交索引变更
         run: |
           set -euo pipefail

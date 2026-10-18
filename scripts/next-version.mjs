@@ -81,10 +81,20 @@ const highest = versions.reduce((a, b) => (cmp(b, a) > 0 ? b : a), '');
 
 let version = base;
 if (highest && cmp(base, highest) <= 0) {
-  // base 不比已发布的最高版本大（含"同一上游版本重发"），递增补一段
-  let k = 1;
-  while (cmp(`${base}.${k}`, highest) <= 0) k++;
-  version = `${base}.${k}`;
+  // base 不比已发布的最高版本大，需要递增。
+  // 两种情况区别对待，避免版本号越堆越长：
+  //   1) 数字段完全相同（同一上游版本重发）→ 递增最后一段：0.2.1.2 → 0.2.1.3
+  //   2) base 更短/更小（如上游发正式版 0.2.1 而源里已有 0.2.1.2）
+  //      → 在 base 后补段直到超过 highest：0.2.1 → 0.2.1.3
+  if (cmp(base, highest) === 0) {
+    const parts = base.split('.').map(Number);
+    parts[parts.length - 1] += 1;
+    version = parts.join('.');
+  } else {
+    let k = 1;
+    while (cmp(`${base}.${k}`, highest) <= 0) k++;
+    version = `${base}.${k}`;
+  }
 }
 
 console.error(`上游版本 ${upstream} → 数字段 ${base}；已发布最高 ${highest || '（无）'}；本次发布版本 ${version}`);
