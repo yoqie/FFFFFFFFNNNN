@@ -13,25 +13,25 @@
   "is_docker": false,
   "service_port": "3082",
   "releases": {
-    "0.2.1-rc.2": {
-      "version": "0.2.1-rc.2",
-      "release_note": "DSH v0.2.1-rc.2 飞牛 fnOS 自动构建（arm/x86），更新内容见上游 deepseek-ai/deepseek-harness。",
-      "updated_at": "2026-10-17T12:51:13Z",
+    "0.2.1.2.1": {
+      "version": "0.2.1.2.1",
+      "release_note": "DSH v0.2.1.2.1 飞牛 fnOS 自动构建（arm/x86），更新内容见上游 deepseek-ai/deepseek-harness。",
+      "updated_at": "2026-10-18T11:03:25Z",
       "packages": {
         "x86": {
-          "version": "0.2.1-rc.2",
-          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.1-rc.2/DSH_v0.2.1-rc.2_amd64.fpk",
-          "sha256": "00b16c1a82f66bf355d1a80c7e0d02fecaa08b06a85984d48d8ff31cc784a057",
-          "size": 166202209
+          "version": "0.2.1.2.1",
+          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.1.2.1/DSH_v0.2.1.2.1_amd64.fpk",
+          "sha256": "829fb8fd8ce3ad08f26ba983da06fda6441b8d4b71b48740c253a70341605892",
+          "size": 166207485
         },
         "arm": {
-          "version": "0.2.1-rc.2",
-          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.1-rc.2/DSH_v0.2.1-rc.2_arm64.fpk",
-          "sha256": "64d99daa5d530b800a1d0228737dd37109e77e17af5acb8d0a424e450b7464fa",
-          "size": 169202954
+          "version": "0.2.1.2.1",
+          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.1.2.1/DSH_v0.2.1.2.1_arm64.fpk",
+          "sha256": "b171802acffd2e126ac045e937940d8c38ab1b2d401c048b45d55187230c3445",
+          "size": 169184012
         }
       }
     }
   },
-  "updated_at": "2026-10-17T12:53:48.517Z"
+  "updated_at": "2026-10-18T11:03:31.224Z"
 }
