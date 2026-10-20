@@ -31,12 +31,10 @@ console.log('upstream latest:', latest);
 const dir = path.join(ROOT, 'build', '1panel');
 const metaPath = path.join(dir, 'meta.json');
 const prev = await readJson(metaPath, null);
-// 打包修订号：上游版本没变、只是本源打包逻辑（脚本 / fnos 工程 / 钩子）改了时手动 +1，
-// 版本会变成 <上游版本>-<修订号>，已安装用户才能在应用中心收到更新。
-const revision = ((await fs.readFile(path.join(dir, 'revision.txt'), 'utf8').catch(() => '1')) || '1').trim() || '1';
-// 指纹跟"上游版本 + 打包修订号"走：任一变化都要重新打包发版
-const fingerprint = crypto.createHash('sha256').update(`1panel@${latest}@${revision}`).digest('hex').slice(0, 16);
-const version = `${latest}-${revision}`; // fnOS 侧 fpk 版本：上游版本 + 本源打包序号
+// 发布版本 = 上游版本，原样跟随（如 2.4.0），不追加任何后缀。
+// 指纹只跟上游版本走：上游发新版才重新打包发版。
+const fingerprint = crypto.createHash('sha256').update(`1panel@${latest}`).digest('hex').slice(0, 16);
+const version = latest;
 
 if (prev && prev.fingerprint === fingerprint) {
   console.log('1panel: unchanged', prev.version);
