@@ -1,19 +1,19 @@
 {
   "app_name": "1panel",
   "releases": {
-    "2.4.0": {
-      "changelog": "跟随 1Panel 官方 v1 LTS 2.4.0 自动打包（原生双架构）。",
-      "updated_at": "2026-10-20T14:33:08.133Z",
+    "2.4.1": {
+      "changelog": "跟随 1Panel 官方 v1 LTS 2.4.1 自动打包（原生双架构）。",
+      "updated_at": "2026-10-22T10:03:36.142Z",
       "packages": {
         "x86": {
-          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/1panel-2.4.0/1panel_2.4.0_x86.fpk",
-          "sha256": "470a70ee29a8642f109cfc5f53408fbb67551a98d6aea2e788e863a8aa3988f5",
-          "size": 64602639
+          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/1panel-2.4.1/1panel_2.4.1_x86.fpk",
+          "sha256": "e8e0a9809a6158acd4984839384b3948a3b6ab847c4311a381406d0120bb1158",
+          "size": 64412559
         },
         "arm": {
-          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/1panel-2.4.0/1panel_2.4.0_arm.fpk",
-          "sha256": "67717401470988c1c9356b9051f11e30e006891da122c5fb60ff30726de1481e",
-          "size": 60106088
+          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/1panel-2.4.1/1panel_2.4.1_arm.fpk",
+          "sha256": "51e57ee221e37985d0554f2f55bf94df44bb997cf3eb527569748a7a6f1eaf03",
+          "size": 59876865
         }
       }
     }

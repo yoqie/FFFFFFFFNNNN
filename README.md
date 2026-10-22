@@ -10,6 +10,6 @@
 
 | 应用 | 描述 | 上游版本 |
 |------|------|----------|
-| [1Panel](build/1panel/) | 开源服务器运维管理面板，提供可视化的 Linux 服务器管理。 | 2.4.0 |
+| [1Panel](build/1panel/) | 开源服务器运维管理面板，提供可视化的 Linux 服务器管理。 | 2.4.1 |
 | [DSH](build/dsh/) | DeepSeek Harness（DSH）飞牛NAS版：自动跟进上游最新版本构建，amd64/arm64 双架构原生安装包，飞牛桌面一键打开。 | 0.2.1-rc.2 |
 | [Router2API](build/Router2API/) | .NET 10 模型路由宿主，把不同提供方的模型统一成 OpenAI 兼容接口，自带 Vue 3 管理后台。包内集成 .NET 自包含运行时与 Redis 运行态，安装即用，无需 Docker。 | https://github.com/NNNNolan/Router2API |
