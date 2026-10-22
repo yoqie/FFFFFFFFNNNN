@@ -33,12 +33,12 @@
     },
     "dsh": {
       "details_url": "apps/dsh.json",
-      "details_updated_at": "2026-10-18T14:32:06.961Z",
+      "details_updated_at": "2026-10-22T18:46:24.606Z",
       "display_name": "DSH",
       "desc": "DeepSeek Harness（DSH）飞牛NAS版：自动跟进上游最新版本构建，amd64/arm64 双架构原生安装包，飞牛桌面一键打开。",
       "platform": [
-        "x86",
-        "arm"
+        "arm",
+        "x86"
       ],
       "categories": [
         "AI赋能",
