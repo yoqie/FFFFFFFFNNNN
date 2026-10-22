@@ -12,26 +12,6 @@
   "install_type": "root",
   "is_docker": false,
   "service_port": "3082",
-  "releases": {
-    "0.2.1-rc.2": {
-      "version": "0.2.1-rc.2",
-      "release_note": "DSH v0.2.1-rc.2 飞牛 fnOS 自动构建（arm/x86），更新内容见上游 deepseek-ai/deepseek-harness。",
-      "updated_at": "2026-10-18T14:27:21Z",
-      "packages": {
-        "x86": {
-          "version": "0.2.1-rc.2",
-          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.1-rc.2/DSH_v0.2.1-rc.2_amd64.fpk",
-          "sha256": "9a75191866931a99244eac704c60c79d2dbf9f8c11f2e72de5050584859b6ec9",
-          "size": 166218936
-        },
-        "arm": {
-          "version": "0.2.1-rc.2",
-          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.1-rc.2/DSH_v0.2.1-rc.2_arm64.fpk",
-          "sha256": "31634f9b70cbbf18f81266c6579a5ea19ab43d24060bf63eb6a77b487500e2c7",
-          "size": 169197054
-        }
-      }
-    }
-  },
+  "releases": {},
   "updated_at": "2026-10-18T14:32:06.961Z"
 }
