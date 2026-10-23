@@ -8,6 +8,12 @@ on:
     # 每小时 05 分检查一次上游 1Panel 是否有新版本；有新版才构建，同步与索引更新走指纹判断，无变化不提交
     - cron: "5 * * * *"
   workflow_dispatch:
+    inputs:
+      force:
+        description: "force=1 时忽略指纹判断，强制重新打包并重发当前版本（修正包内容用）"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -23,6 +29,8 @@ jobs:
         with:
           node-version: 22
       - name: Sync all upstreams
+        env:
+          FORCE: ${{ inputs.force && '1' || '' }}
         run: |
           node scripts/sync-1panel.mjs --repo ${{ github.repository }}
           node scripts/update-index.mjs --repo ${{ github.repository }}

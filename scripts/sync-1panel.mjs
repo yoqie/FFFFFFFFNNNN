@@ -36,7 +36,13 @@ const prev = await readJson(metaPath, null);
 const fingerprint = crypto.createHash('sha256').update(`1panel@${latest}`).digest('hex').slice(0, 16);
 const version = latest;
 
-if (prev && prev.fingerprint === fingerprint) {
+// 先落一个空的 pending：无更新时也要有文件存在，否则工作流的 dump 步骤
+// require('./pending.json') 会抛错，把整个 follow-upstream 任务带挂。
+await writeJson(path.join(ROOT, 'pending.json'), []);
+
+// FORCE=1：忽略指纹，强制把当前版本写入 pending，用于修正包内容后重发同一版本。
+const FORCE = /^(1|true|yes)$/i.test(String(process.env.FORCE || ''));
+if (prev && prev.fingerprint === fingerprint && !FORCE) {
   console.log('1panel: unchanged', prev.version);
 } else {
   const status = prev ? 'updated' : 'added';

@@ -49,26 +49,28 @@ await fs.writeFile(path.join(assetDir, 'README.md'), readmeText);
 const detailPath = path.join(ROOT, 'apps', '1panel.json');
 const detail = await readJson(detailPath, null) || { app_name: '1panel', releases: {} };
 detail.releases = detail.releases || {};
-if (!detail.releases[entry.version]) {
-  const pkgs = {};
-  for (const plat of ['x86', 'arm']) {
-    pkgs[plat] = {
-      download_url: `https://github.com/${REPO}/releases/download/${TAG}/${infos[plat].file}`,
-      sha256: infos[plat].sha256,
-      size: infos[plat].size,
-    };
-  }
-  // 更新信息同步 1Panel 官方该版本的 Release 正文；取不到时回退为默认说明。
-  const upstreamNote = await fetchUpstreamNote('1Panel-dev/1Panel', meta.upstream, {
-    tags: ['v{v}', '{v}'],
-    maxLen: 6000,
-  });
-  detail.releases[entry.version] = {
-    changelog: upstreamNote || `跟随 1Panel 官方 v1 LTS ${meta.upstream} 自动打包（原生双架构）。`,
-    updated_at: new Date().toISOString(),
-    packages: pkgs,
+// 同版本重发（如修正包内 manifest）时也必须刷新 packages：新 .fpk 的 sha256
+// 与旧的不同，只覆盖 Release 资产而不更新索引，安装时校验会失败。
+const pkgs = {};
+for (const plat of ['x86', 'arm']) {
+  pkgs[plat] = {
+    download_url: `https://github.com/${REPO}/releases/download/${TAG}/${infos[plat].file}`,
+    sha256: infos[plat].sha256,
+    size: infos[plat].size,
   };
 }
+// 更新信息同步 1Panel 官方该版本的 Release 正文；取不到时回退为默认说明。
+const upstreamNote = await fetchUpstreamNote('1Panel-dev/1Panel', meta.upstream, {
+  tags: ['v{v}', '{v}'],
+  maxLen: 6000,
+});
+const prevRel = detail.releases[entry.version];
+detail.releases[entry.version] = {
+  changelog: upstreamNote || (prevRel && prevRel.changelog)
+    || `跟随 1Panel 官方 v1 LTS ${meta.upstream} 自动打包（原生双架构）。`,
+  updated_at: new Date().toISOString(),
+  packages: pkgs,
+};
 const vers = Object.keys(detail.releases).sort().reverse();
 for (const v of vers.slice(100)) delete detail.releases[v];
 await writeJson(detailPath, detail);
