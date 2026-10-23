@@ -213,6 +213,9 @@ fi
 find "${APP_CONTENT}" -type d -exec chmod 755 {} + 2>/dev/null || true
 find "${APP_CONTENT}" -type f -exec chmod 644 {} + 2>/dev/null || true
 chmod -R 755 "${APP_CONTENT}/bin" 2>/dev/null || true
+# node_modules/.bin 下的转发脚本必须保留可执行位：上面的 644 会把它们清掉，
+# 而 runner 是用 spawn("pnpm") 直接执行的，权限不足会报 EACCES。
+find "${APP_CONTENT}/node_modules/.bin" -type f -exec chmod 755 {} + 2>/dev/null || true
 
 echo "==> [4/4] 校验组装结果"
 if [ ! -d "${APP_CONTENT}/node_modules/@deepseek-ai/dsh" ]; then

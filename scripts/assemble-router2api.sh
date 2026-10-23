@@ -277,6 +277,8 @@ find "${APP_CONTENT}" -type f -exec chmod 644 {} + 2>/dev/null || true
 chmod 755 "${APP_CONTENT}/host/Router.Host" 2>/dev/null || true
 chmod 755 "${APP_CONTENT}/redis/redis-server" "${APP_CONTENT}/redis/redis-cli" 2>/dev/null || true
 chmod 755 "${APP_CONTENT}/host/createdump" 2>/dev/null || true
+# node_modules/.bin 下的转发脚本必须保留可执行位（上面的 644 会清掉）
+find "${APP_CONTENT}/node_modules/.bin" -type f -exec chmod 755 {} + 2>/dev/null || true
 
 # 包根目录的文件同样要规范权限（fpk 会把这些文件单独打包）
 find "${APP_PKG}" -maxdepth 1 -type f -exec chmod 644 {} + 2>/dev/null || true
