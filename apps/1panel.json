@@ -3,17 +3,17 @@
   "releases": {
     "2.4.1": {
       "changelog": "[English](#en-v2.4.1) | [中文](#cn-v2.4.1)\r\n\r\n<h3 id=\"en-v2.4.1\">Bug Fixes</h3>\r\n\r\n* System: Upgraded Go to 1.27.3 to fix the crypto/x509 security vulnerability ([CVE-2026-111943](https://www.cve.org/CVERecord?id=CVE-2026-111943))\r\n\r\n<h3 id=\"cn-v2.4.1\">问题修复</h3>\r\n\r\n* 【系统】升级 Go 至 1.27.3，修复 crypto/x509 安全漏洞（[CVE-2026-111943](https://www.cve.org/CVERecord?id=CVE-2026-111943)）",
-      "updated_at": "2026-10-22T10:03:36.142Z",
+      "updated_at": "2026-10-23T03:56:54.716Z",
       "packages": {
         "x86": {
           "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/1panel-2.4.1/1panel_2.4.1_x86.fpk",
-          "sha256": "e8e0a9809a6158acd4984839384b3948a3b6ab847c4311a381406d0120bb1158",
-          "size": 64412559
+          "sha256": "646fdd46137e2c75b8db61fcc2c7766f56dd9c76797bdfdfaafb6eaa0c210169",
+          "size": 64388367
         },
         "arm": {
           "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/1panel-2.4.1/1panel_2.4.1_arm.fpk",
-          "sha256": "51e57ee221e37985d0554f2f55bf94df44bb997cf3eb527569748a7a6f1eaf03",
-          "size": 59876865
+          "sha256": "210fe115f37b489b0f40bf9a2bc4140b60061a8451c36e2765ca57d92b218920",
+          "size": 59876499
         }
       }
     }
