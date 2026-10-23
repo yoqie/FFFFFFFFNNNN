@@ -184,10 +184,14 @@ jobs:
             NOTES=$(printf '%s\n\n## 更新内容（同步自上游）\n\n%s' \
               "自动跟随官方源打包更新：$NAME $VER。由本源 GitHub Actions 生成。" \
               "$NOTE")
-            gh release create "$TAG" dist/${slug}*.fpk \
-              --title "$NAME $VER" \
-              --notes "$NOTES" \
-              || gh release upload "$TAG" dist/${slug}*.fpk --clobber
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              # 已存在：覆盖资产并同步更新说明（只 upload 不会改说明）
+              gh release upload "$TAG" dist/${slug}*.fpk --clobber
+              gh release edit "$TAG" --notes "$NOTES"
+            else
+              gh release create "$TAG" dist/${slug}*.fpk \
+                --title "$NAME $VER" --notes "$NOTES"
+            fi
             # 同一应用只保留最新版 Release（--keep-tag 双保险，绝不删掉刚发的这个），
             # 同时清理 apps/<slug>.json 里指向已删除 Release 的下载条目。
             node scripts/prune-releases.mjs --slug "$slug" --keep-tag "$TAG"

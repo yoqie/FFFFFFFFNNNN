@@ -208,6 +208,9 @@ jobs:
     needs: [prepare, build]
     runs-on: ubuntu-latest
     steps:
+      # 需要仓库里的 scripts/upstream-note.mjs 去取上游更新说明
+      - uses: actions/checkout@v4
+
       - name: 下载全部 fpk
         uses: actions/download-artifact@v4
         with:
@@ -238,6 +241,8 @@ jobs:
           ${UPSTREAM_NOTES}"
           if gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             gh release upload "${TAG}" dist/*.fpk --repo "${GITHUB_REPOSITORY}" --clobber
+            # 只 upload 不会改说明，显式同步一次
+            gh release edit "${TAG}" --repo "${GITHUB_REPOSITORY}" --notes "${NOTES}"
           else
             gh release create "${TAG}" dist/*.fpk --repo "${GITHUB_REPOSITORY}" \
               --title "Router2API ${VERSION}" --notes "${NOTES}"

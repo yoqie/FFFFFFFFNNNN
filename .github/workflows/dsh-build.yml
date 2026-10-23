@@ -312,6 +312,9 @@ jobs:
     outputs:
       upstream: ${{ steps.meta.outputs.upstream }}
     steps:
+      # 需要仓库里的 scripts/upstream-note.mjs 去取上游更新说明
+      - uses: actions/checkout@v4
+
       - name: 汇总双架构产物
         id: collect
         # 定时任务且上游版本未变化时无产物可下载，不视为失败
