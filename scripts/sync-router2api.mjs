@@ -7,7 +7,7 @@
  *
  * 最上游作者：
  *   宿主项目本体是 NNNNolan/Router2API（cliii-one/Router2API 只是把它打包成 fpk），
- *   因此索引里的 maintainer / maintainer_url 固定写最上游作者 NNNNolan，
+ *   因此索引里的 maintainer 固定写最上游作者 NNNNolan（不写上游仓库地址），
  *   不走上游 manifest 里的打包者署名（Router2API-fnos）。每次同步都会强制覆盖，
  *   避免上游改署名后索引跟着漂移。
  *
@@ -192,8 +192,8 @@ const detail = await readJson(detailPath, {
 // 改动指纹要在任何"归位/重置"之前取，作为"内容有没有真的变"的基准
 const beforeFp = fingerprint(detail);
 
-// 作者署名每次强制归位到最上游，防止历史文件或上游署名把索引带偏。
-// 上游仓库地址不写进索引（避免关联误解），但作者名保留以符合许可证的署名要求。
+// 作者署名强制归位到最上游，防止历史文件或上游署名把索引带偏。
+// 上游仓库地址不写进索引（避免关联误解），作者名保留以符合许可证署名要求。
 if (detail.maintainer !== MAINTAINER) {
   console.log(`作者归位：${detail.maintainer || '(空)'} → ${MAINTAINER}（最上游）`);
 }

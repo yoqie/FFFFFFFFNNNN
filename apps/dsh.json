@@ -7,6 +7,7 @@
     "编程开发"
   ],
   "maintainer": "deepseek-ai",
+  "maintainer_url": "https://github.com/deepseek-ai/deepseek-harness",
   "run_as": "root",
   "install_type": "root",
   "is_docker": false,

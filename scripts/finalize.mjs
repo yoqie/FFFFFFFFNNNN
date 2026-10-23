@@ -61,7 +61,7 @@ for (const { slug, version } of pending) {
   if (readmeUrl) detail.readme_url = readmeUrl;
   detail.bug_report_url = `https://github.com/${REPO}/issues`;
   detail.maintainer = '1Panel';
-  delete detail.maintainer_url;
+  detail.maintainer_url = meta.maintainer_url;
   detail.distributor = (await readJson(path.join(ROOT, 'source.json'), {})).author || 'yoqie';
   detail.distributor_url = `https://github.com/${REPO}`;
   detail.run_as = 'package';

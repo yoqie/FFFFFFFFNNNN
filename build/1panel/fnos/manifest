@@ -3,6 +3,7 @@ version         = 0.0.0
 display_name    = 1Panel
 platform        = x86
 maintainer      = 1Panel-dev
+maintainer_url  = https://github.com/1Panel-dev/1Panel
 distributor     = yoqie
 distributor_url = https://github.com/yoqie/FFFFFFFFNNNN
 install_type    = root

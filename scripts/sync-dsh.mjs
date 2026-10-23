@@ -40,6 +40,7 @@ const UPSTREAM_REPOS = (process.env.DSH_UPSTREAM_REPO
 // DSH 本体是 deepseek-ai/deepseek-harness；cliii-one/DSH_FNOS（及其 fork）只是把它
 // 打包成 fpk 的仓库，因此索引里的作者写最上游，不随打包仓库的署名变化。
 const MAINTAINER = 'deepseek-ai';
+const MAINTAINER_URL = 'https://github.com/deepseek-ai/deepseek-harness';
 
 const TOKEN = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || '';
 const HEADERS = { 'User-Agent': 'FnDepot-sync', Accept: 'application/vnd.github+json' };
@@ -173,7 +174,8 @@ const detail = await readJson(detailPath, {
   display_name: 'DSH',
   desc: 'DeepSeek Harness（DSH）飞牛NAS版：自动跟进上游最新版本构建，amd64/arm64 双架构原生安装包，飞牛桌面一键打开。',
   categories: ['AI赋能', '编程开发'],
-  maintainer: MAINTAINER,
+  maintainer: 'cliii-one',
+  maintainer_url: `https://github.com/${UPSTREAM_REPOS[0]}`,
   run_as: 'root',
   install_type: 'root',
   is_docker: false,
@@ -184,13 +186,12 @@ const detail = await readJson(detailPath, {
 // 改动指纹要在任何"归位/重置"之前取，作为"内容有没有真的变"的基准
 const beforeFp = fingerprint(detail);
 
-// 作者归位到最上游（deepseek-ai）。上游仓库地址不写进索引，避免与上游项目
-// 产生关联误解；作者署名保留，以符合上游许可证的著作者身份声明。
-if (detail.maintainer !== MAINTAINER) {
+// 作者归位到最上游（deepseek-ai/deepseek-harness）
+if (detail.maintainer !== MAINTAINER || detail.maintainer_url !== MAINTAINER_URL) {
   console.log(`作者归位：${detail.maintainer || '(空)'} → ${MAINTAINER}（最上游）`);
 }
 detail.maintainer = MAINTAINER;
-delete detail.maintainer_url;
+detail.maintainer_url = MAINTAINER_URL;
 
 let synced = 0;
 for (const rel of releases) {
@@ -249,6 +250,7 @@ const meta = {
   version: latest,
   categories: detail.categories,
   maintainer: detail.maintainer,
+  maintainer_url: detail.maintainer_url,
   service_port: detail.service_port,
   run_as: 'root',
   install_type: 'root',

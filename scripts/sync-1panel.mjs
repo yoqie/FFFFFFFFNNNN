@@ -44,6 +44,7 @@ if (prev && prev.fingerprint === fingerprint) {
     slug: '1panel', appname: '1panel', displayName: '1Panel',
     desc: '开源服务器运维管理面板，提供可视化的 Linux 服务器管理。',
     version, upstream: latest, categories: ['系统工具'],
+    maintainer_url: 'https://github.com/1Panel-dev/1Panel',
     fingerprint, updated_at: new Date().toISOString(),
   });
   await writeJson(path.join(ROOT, 'pending.json'), [{ slug: '1panel', version, upstream: latest }]);
@@ -85,7 +86,7 @@ if (meta) {
     icon_url: `https://raw.githubusercontent.com/${REPO}/main/assets/1panel/ICON.PNG`,
     readme_url: `https://raw.githubusercontent.com/${REPO}/main/assets/1panel/README.md`,
     bug_report_url: `https://github.com/${REPO}/issues`,
-    maintainer: '1Panel-dev',
+    maintainer: '1Panel-dev', maintainer_url: 'https://github.com/1Panel-dev/1Panel',
     distributor: source.author || 'yoqie', distributor_url: `https://github.com/${REPO}`,
     run_as: 'root', install_type: 'root', is_docker: false, service_port: '18090',
   });
@@ -103,8 +104,8 @@ for (const slug of allowlist) {
   rows.push(`| ${m ? `[${m.displayName}](build/${slug}/)` : slug} | ${m ? m.desc : '—'} | ${m ? m.version : '—'} |`);
 }
 await fs.writeFile(path.join(ROOT, 'README.md'),
-  `# yoqie · 1Panel 跟随源\n\n飞牛 fnOS 个人第三方应用源（个人维护，非任何官方源）——由 GitHub Actions 跟随上游发布自动打包更新（面板本体为原生 FPK，其余为 Docker 型 FPK）。\n\n` +
+  `# yoqie · 1Panel 跟随源\n\n飞牛 fnOS 个人第三方应用源（个人维护，非 FnDepot 官方源）——由 GitHub Actions 跟随 [1Panel 官方](https://github.com/1Panel-dev/1Panel) 自动打包更新（面板本体为原生 FPK，其余为 Docker 型 FPK）。\n\n` +
   `- 源地址（添加到 FnDepot/AppCenter 第三方源）：\`https://github.com/${REPO}\` 或 \`https://raw.githubusercontent.com/${REPO}/main/fnpack.json\`\n` +
-  `- 跟随：1Panel 面板本体（v2 系列）+ \`apps.allowlist.txt\` 名单中的应用市场应用\n` +
-  `- 同步频率：每天一次（可手动触发），有新版本时自动打包 FPK 并发布 Release。\n\n## 应用列表\n\n| 应用 | 描述 | 版本 |\n|------|------|----------|\n${rows.join('\n')}\n`);
+  `- 跟随：1Panel 面板本体（v2 系列，官方 CDN）+ \`apps.allowlist.txt\` 名单中的应用市场应用\n` +
+  `- 同步频率：每天一次（可手动触发），有新版本时自动打包 FPK 并发布 Release。\n\n## 应用列表\n\n| 应用 | 描述 | 上游版本 |\n|------|------|----------|\n${rows.join('\n')}\n`);
 console.log('done.');
