@@ -159,7 +159,31 @@ cp "${REPO_ROOT}/plugin/package.json" "${REPO_ROOT}/plugin/cordis.patch.yml" "${
 # 飞牛安装器的 ApplyPermission 会递归遍历包内文件，遇到无法解析的软链
 # 会直接报 ErrCodeInstallDirAuthException(10234)「设置目录权限失败」。
 # 处理策略：断链一律删除；有效软链实体化为真实文件，彻底规避该问题。
-# 运行器直接调用 node 执行 bin.js，不依赖 node_modules/.bin 中的软链。
+#
+# 例外：node_modules/.bin 下的软链不能"复制实体化"。
+# 这些 bin 脚本内部用相对路径 require 自己包内的文件（例如
+# pnpm/bin/pnpm.cjs 里的 require('../dist/pnpm.cjs')）；一旦被复制到
+# .bin/ 下，相对路径就变成 node_modules/dist/pnpm.cjs → MODULE_NOT_FOUND。
+# 而 runner 会把 .bin 前置进子进程 PATH 来提供 pnpm，于是插件安装全线报
+# "Cannot find module '../dist/pnpm.cjs'"。这里改为生成一层 node 转发脚本：
+# 目标文件留在原位，由它自己解析内部依赖，既不复制、也不留软链。
+echo "==> 处理 node_modules/.bin（生成转发脚本，不复制、不留软链）"
+if [ -d "${APP_CONTENT}/node_modules/.bin" ]; then
+    BIN_DIR="${APP_CONTENT}/node_modules/.bin"
+    while IFS= read -r link; do
+        [ -z "${link}" ] && continue
+        target=$(readlink -f "${link}" 2>/dev/null)
+        if [ -n "${target}" ] && [ -e "${target}" ]; then
+            rel=$(realpath --relative-to="${BIN_DIR}" "${target}")
+            rm -f "${link}"
+            printf '#!/usr/bin/env node\nrequire(%s)\n' "'./${rel}'" > "${link}"
+            chmod 755 "${link}"
+        else
+            rm -f "${link}"
+        fi
+    done < <(find "${BIN_DIR}" -maxdepth 1 -type l 2>/dev/null)
+fi
+
 echo "==> 清理符号链接（断链删除 / 有效实体化）"
 BROKEN=0
 RESOLVED=0
@@ -205,6 +229,14 @@ if [ ! -e "${APP_CONTENT}/node_modules/.bin/pnpm" ] && [ ! -f "${APP_CONTENT}/no
     echo "FATAL: 打包产物缺少 pnpm（插件安装功能将不可用）" >&2
     exit 1
 fi
+# 仅"文件存在"不够：上面的转发脚本必须真能跑起来，否则装完就报
+# MODULE_NOT_FOUND。构建期冒烟测试，把这类问题挡在发布之前。
+if ! "${APP_CONTENT}/node_modules/.bin/pnpm" --version >/dev/null 2>&1; then
+    echo "FATAL: node_modules/.bin/pnpm 无法执行（插件安装功能将不可用）" >&2
+    "${APP_CONTENT}/node_modules/.bin/pnpm" --version >&2 || true
+    exit 1
+fi
+echo "    pnpm 冒烟测试通过: $("${APP_CONTENT}/node_modules/.bin/pnpm" --version 2>/dev/null)"
 # 原生模块校验：按目标架构参数化（TARGET_ARCH=amd64/arm64，NODE_ARCH=x64/arm64，
 # 由 CI 的 job 级环境变量传入，与运行器架构一致）
 OTHER_ARCH=x64; [ "${NODE_ARCH}" = "x64" ] && OTHER_ARCH=arm64

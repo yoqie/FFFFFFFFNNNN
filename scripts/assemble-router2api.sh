@@ -227,6 +227,26 @@ log "[6/6] 清理软链、统一权限并校验"
 # 飞牛安装器会对 app.tgz 递归设置目录权限（ApplyPermission）。
 # 软链（尤其自包含发布可能带出的 .so 软链）会干扰这一过程，
 # 统一实体化：有效软链复制成真实文件，断链直接删除。
+#
+# 例外：node_modules/.bin 下的软链不能"复制实体化"——这些 bin 脚本内部用
+# 相对路径 require 自己包内的文件，被复制到 .bin/ 后相对路径失效，运行即报
+# MODULE_NOT_FOUND（DSH 包的 pnpm 就栽在这里）。改为生成一层 node 转发脚本。
+if [ -d "${APP_CONTENT}/node_modules/.bin" ]; then
+    BIN_DIR="${APP_CONTENT}/node_modules/.bin"
+    while IFS= read -r link; do
+        [ -z "${link}" ] && continue
+        target=$(readlink -f "${link}" 2>/dev/null)
+        if [ -n "${target}" ] && [ -e "${target}" ]; then
+            rel=$(realpath --relative-to="${BIN_DIR}" "${target}")
+            rm -f "${link}"
+            printf '#!/usr/bin/env node\nrequire(%s)\n' "'./${rel}'" > "${link}"
+            chmod 755 "${link}"
+        else
+            rm -f "${link}"
+        fi
+    done < <(find "${BIN_DIR}" -maxdepth 1 -type l 2>/dev/null)
+fi
+
 RESOLVED=0; BROKEN=0
 while IFS= read -r link; do
     [ -z "${link}" ] && continue
