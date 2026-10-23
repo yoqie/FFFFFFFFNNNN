@@ -223,9 +223,19 @@ jobs:
           set -euo pipefail
           ls -la dist
           TAG="Router2API-${VERSION}"
+          # 更新内容同步上游该版本 Release 正文；--strip-urls 保证不带出上游地址。
+          UPSTREAM_NOTES=$(node scripts/upstream-note.mjs \
+            --repo NNNNolan/Router2API \
+            --version "${VERSION}" \
+            --tags 'v{v},{v}' --strip-urls 2>/dev/null || true)
+          [ -n "${UPSTREAM_NOTES}" ] || UPSTREAM_NOTES="（上游未提供该版本的更新说明）"
           NOTES="Router2API v${VERSION} 飞牛 fnOS 原生包（amd64/arm64），由本仓库从上游自动构建。
             对应上游版本：${UPSTREAM}
-          打包流程说明：见仓库 scripts/assemble-router2api.sh"
+          打包流程说明：见仓库 scripts/assemble-router2api.sh
+
+          ## 上游更新说明（同步）
+
+          ${UPSTREAM_NOTES}"
           if gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             gh release upload "${TAG}" dist/*.fpk --repo "${GITHUB_REPOSITORY}" --clobber
           else

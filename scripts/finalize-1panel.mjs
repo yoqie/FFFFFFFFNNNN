@@ -10,6 +10,7 @@
 
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { fetchUpstreamNote } from './upstream-note.mjs';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const args = process.argv.slice(2);
@@ -57,8 +58,13 @@ if (!detail.releases[entry.version]) {
       size: infos[plat].size,
     };
   }
+  // 更新信息同步 1Panel 官方该版本的 Release 正文；取不到时回退为默认说明。
+  const upstreamNote = await fetchUpstreamNote('1Panel-dev/1Panel', meta.upstream, {
+    tags: ['v{v}', '{v}'],
+    maxLen: 6000,
+  });
   detail.releases[entry.version] = {
-    changelog: `跟随 1Panel 官方 v1 LTS ${meta.upstream} 自动打包（原生双架构）。`,
+    changelog: upstreamNote || `跟随 1Panel 官方 v1 LTS ${meta.upstream} 自动打包（原生双架构）。`,
     updated_at: new Date().toISOString(),
     packages: pkgs,
   };

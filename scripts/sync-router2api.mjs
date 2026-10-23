@@ -28,6 +28,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { fetchUpstreamNote } from './upstream-note.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
@@ -44,6 +45,8 @@ const UPSTREAM_REPOS = (process.env.ROUTER2API_UPSTREAM_REPO
 
 // —— 最上游作者（固定写死，不被上游 manifest 的打包者署名覆盖）——
 const MAINTAINER = 'NNNNolan';
+// 上游仓库：仅用于取该版本的更新说明（写入索引时不带出上游地址）
+const UPSTREAM_NOTE_REPO = 'NNNNolan/Router2API';
 const DISPLAY_NAME = 'Router2API';
 const DESC = '.NET 10 模型路由宿主，把不同提供方的模型统一成 OpenAI 兼容接口，自带 Vue 3 管理后台。包内集成 .NET 自包含运行时与 Redis 运行态，安装即用，无需 Docker。';
 const CATEGORIES = ['AI赋能', '编程开发'];
@@ -214,9 +217,18 @@ for (const rel of releases) {
       pkg.sha256 = await sha256Of(pkg.download_url);
     }
   }
-  const note = rel.__repo === REPO
-    ? `Router2API v${version} 飞牛 fnOS 原生包（${[...packages.keys()].sort().join('/')}），由本源从上游 ${MAINTAINER} 的最新源码自动构建。`
-    : `Router2API v${version} 飞牛 fnOS 原生包（${[...packages.keys()].sort().join('/')}），由 ${rel.__repo} 自动打包。`;
+  // 更新信息同步上游该版本的 Release 正文；stripUrls=true 保证不带出上游地址。
+  const upstreamNote = await fetchUpstreamNote(UPSTREAM_NOTE_REPO, version, {
+    tags: ['v{v}', '{v}'],
+    stripUrls: true,
+    maxLen: 6000,
+  });
+  const builtBy = rel.__repo === REPO
+    ? `由本源从上游 ${MAINTAINER} 的最新源码自动构建`
+    : `由 ${rel.__repo} 自动打包`;
+  const note = upstreamNote
+    ? upstreamNote
+    : `Router2API v${version} 飞牛 fnOS 原生包（${[...packages.keys()].sort().join('/')}），${builtBy}。`;
   // 同版本先删后加：保证键序保持"旧→新"，且以最新一次构建的资产为准
   delete detail.releases[version];
   detail.releases[version] = {

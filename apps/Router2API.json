@@ -14,7 +14,7 @@
   "releases": {
     "2.1.0": {
       "version": "2.1.0",
-      "release_note": "Router2API v2.1.0 飞牛 fnOS 原生包（arm/x86），由本源从上游 NNNNolan 的最新源码自动构建。",
+      "release_note": "## 更新内容\n\n### 🚀 Features | 新特性\n\n- **web** 优化管理界面与交互动效 (`01568c2`)\n\n- **web** 优化管理界面与交互动效 (`3876e34`)\n\n## Contracts 版本\n\n- C# 插件依赖：`Router.Contracts` NuGet 包。\n- 本次是否更新：未更新，继续使用 `2.0.0`。\n- 当前采用版本：`2.0.0`。\n\n## Docker 镜像\n\n- 镜像仓库：`hhhhzy/router2api`，镜像标签与本次 Release 版本一致。\n- 支持平台：`linux/amd64`、`linux/arm64`。\n\n## 升级说明\n\n- Docker Compose 部署可执行 `docker compose pull && docker compose up -d` 更新宿主。\n- 更新前请备份配置和持久化数据。\n- 宿主镜像不会自动更新已安装插件，请在管理后台单独检查插件版本及兼容性。",
       "updated_at": "2026-10-18T14:34:28Z",
       "packages": {
         "x86": {
@@ -32,5 +32,5 @@
       }
     }
   },
-  "updated_at": "2026-10-18T14:34:35.175Z"
+  "updated_at": "2026-10-23T03:51:17.200Z"
 }

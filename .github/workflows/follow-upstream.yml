@@ -163,9 +163,22 @@ jobs:
             # 先把新版本发出去，成功了再删旧版本：顺序反过来的话，一旦发布失败旧版本已经没了，
             # 用户会一个能装的包都不剩。只发 .fpk（不要把 fpk-info.json 也当资产传上去）；
             # tag 已存在时改为覆盖上传，避免“Release 建了但索引没提交”的情况下卡死重试。
+            # 更新内容取自上游该版本的 Release 正文（finalize 已写入 apps/<slug>.json）
+            NOTE=$(node -e "
+              const fs=require('fs');
+              const p='./apps/$slug.json';
+              const d=fs.existsSync(p)?JSON.parse(fs.readFileSync(p,'utf8')):{};
+              const r=(d.releases||{})['$VER']||{};
+              process.stdout.write(r.changelog||r.release_note||'');
+            ")
+            [ -n "$NOTE" ] || NOTE="（上游未提供该版本的更新说明）"
+            # 用 printf 拼接多行说明，避免在 YAML 块标量里出现顶格行
+            NOTES=$(printf '%s\n\n## 更新内容（同步自上游）\n\n%s' \
+              "自动跟随官方源打包更新：$NAME $VER。由本源 GitHub Actions 生成。" \
+              "$NOTE")
             gh release create "$TAG" dist/${slug}*.fpk \
               --title "$NAME $VER" \
-              --notes "自动跟随官方源打包更新：$NAME $VER。由本源 GitHub Actions 生成。" \
+              --notes "$NOTES" \
               || gh release upload "$TAG" dist/${slug}*.fpk --clobber
             # 同一应用只保留最新版 Release（--keep-tag 双保险，绝不删掉刚发的这个），
             # 同时清理 apps/<slug>.json 里指向已删除 Release 的下载条目。

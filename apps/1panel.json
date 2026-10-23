@@ -2,7 +2,7 @@
   "app_name": "1panel",
   "releases": {
     "2.4.1": {
-      "changelog": "跟随 1Panel 官方 v1 LTS 2.4.1 自动打包（原生双架构）。",
+      "changelog": "[English](#en-v2.4.1) | [中文](#cn-v2.4.1)\r\n\r\n<h3 id=\"en-v2.4.1\">Bug Fixes</h3>\r\n\r\n* System: Upgraded Go to 1.27.3 to fix the crypto/x509 security vulnerability ([CVE-2026-111943](https://www.cve.org/CVERecord?id=CVE-2026-111943))\r\n\r\n<h3 id=\"cn-v2.4.1\">问题修复</h3>\r\n\r\n* 【系统】升级 Go 至 1.27.3，修复 crypto/x509 安全漏洞（[CVE-2026-111943](https://www.cve.org/CVERecord?id=CVE-2026-111943)）",
       "updated_at": "2026-10-22T10:03:36.142Z",
       "packages": {
         "x86": {

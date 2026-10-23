@@ -22,6 +22,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { fetchUpstreamNote } from './upstream-note.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
@@ -40,6 +41,8 @@ const UPSTREAM_REPOS = (process.env.DSH_UPSTREAM_REPO
 // DSH 本体是 deepseek-ai/deepseek-harness；cliii-one/DSH_FNOS（及其 fork）只是把它
 // 打包成 fpk 的仓库，因此索引里的作者写最上游，不随打包仓库的署名变化。
 const MAINTAINER = 'deepseek-ai';
+// DSH 官方上游仓库：用于取该版本的上游更新说明
+const UPSTREAM_NOTE_REPO = 'deepseek-ai/deepseek-harness';
 const MAINTAINER_URL = 'https://github.com/deepseek-ai/deepseek-harness';
 
 const TOKEN = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || '';
@@ -204,7 +207,14 @@ for (const rel of releases) {
       pkg.sha256 = await sha256Of(pkg.download_url);
     }
   }
-  const note = `DSH v${version} 飞牛 fnOS 自动构建（${[...packages.keys()].sort().join('/')}），更新内容见上游 deepseek-ai/deepseek-harness。`;
+  // 更新信息直接同步上游该版本的 Release 正文；取不到时回退为默认说明。
+  const upstreamNote = await fetchUpstreamNote(UPSTREAM_NOTE_REPO, version, {
+    tags: ['dsh-v{v}', 'v{v}', '{v}'],
+    maxLen: 6000,
+  });
+  const note = upstreamNote
+    ? upstreamNote
+    : `DSH v${version} 飞牛 fnOS 自动构建（${[...packages.keys()].sort().join('/')}）。`;
   // 同版本先删后加：保证键序保持"旧→新"，且以最新一次构建的资产为准
   delete detail.releases[version];
   detail.releases[version] = {

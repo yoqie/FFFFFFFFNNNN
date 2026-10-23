@@ -357,6 +357,13 @@ jobs:
         run: |
           # Release 说明（幂等：每次发布都重新生成）
           # heredoc 未加引号：${DSH_VERSION} 由环境变量展开
+          # 更新内容取自上游 deepseek-ai/deepseek-harness 对应 tag 的 Release 正文；
+          # 取不到时回退为一行提示，不阻断发布。
+          UPSTREAM_NOTES=$(node scripts/upstream-note.mjs \
+            --repo deepseek-ai/deepseek-harness \
+            --version "${DSH_VERSION}" \
+            --tags 'dsh-v{v},v{v},{v}' 2>/dev/null || true)
+          [ -n "${UPSTREAM_NOTES}" ] || UPSTREAM_NOTES="（上游未提供该版本的更新说明）"
           cat > release-notes.md <<NOTES
           DeepSeek Harness v${DSH_VERSION} 飞牛 fnOS 自动构建版（GitHub Actions 双架构原生构建）。
 
@@ -364,7 +371,9 @@ jobs:
           - x86_64（AMD/Intel，绝大多数 NAS 与虚拟机）→ DSH_v${DSH_VERSION}_amd64.fpk
           - ARM64 → DSH_v${DSH_VERSION}_arm64.fpk
 
-          **更新内容见上游**: https://github.com/deepseek-ai/deepseek-harness
+          ## 更新内容（同步自上游）
+
+          ${UPSTREAM_NOTES}
 
           **安装/升级方式**:
           1. 下载与 NAS 架构对应的 fpk
