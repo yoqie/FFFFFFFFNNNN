@@ -1,6 +1,6 @@
-# FnDepot · 跟随源
+# yoqie · 跟随源
 
-飞牛 fnOS 个人第三方应用源——由 GitHub Actions 跟随 [1Panel 官方](https://github.com/1Panel-dev/1Panel)、[DSH 上游](https://github.com/cliii-one/DSH_FNOS)、[Router2API 飞牛打包](https://github.com/cliii-one/Router2API)（最上游 [NNNNolan/Router2API](https://github.com/NNNNolan/Router2API)）、官方 Node.js 与 `apps.allowlist.txt` 名单中的应用市场应用自动打包更新。
+飞牛 fnOS 个人第三方应用源（个人维护，非 FnDepot 官方源）——由 GitHub Actions 跟随 [1Panel 官方](https://github.com/1Panel-dev/1Panel)、[DSH 上游](https://github.com/cliii-one/DSH_FNOS)、[Router2API 飞牛打包](https://github.com/cliii-one/Router2API)（最上游 [NNNNolan/Router2API](https://github.com/NNNNolan/Router2API)）、官方 Node.js 与 `apps.allowlist.txt` 名单中的应用市场应用自动打包更新。
 
 - 源地址（添加到 FnDepot/AppCenter 第三方源）：`https://github.com/yoqie/FFFFFFFFNNNN` 或 `https://raw.githubusercontent.com/yoqie/FFFFFFFFNNNN/main/fnpack.json`
 - 跟随：1Panel 面板 v2、DSH（DeepSeek Harness，amd64/arm64 双架构）、Router2API（.NET 10 模型路由宿主，amd64/arm64 双架构） + `apps.allowlist.txt` 名单中的应用市场应用
