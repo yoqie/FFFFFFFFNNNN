@@ -42,7 +42,7 @@ for (const plat of ['x86', 'arm']) {
 const assetDir = path.join(ROOT, 'assets', '1panel');
 await fs.mkdir(assetDir, { recursive: true });
 await fs.copyFile(path.join(ROOT, 'build', '1panel', 'fnos', 'ICON.PNG'), path.join(assetDir, 'ICON.PNG'));
-const readmeText = `# 1Panel\n\n开源服务器运维管理面板，提供可视化的 Linux 服务器管理。\n\n- 上游版本：${meta.upstream}\n- 官网：https://1panel.cn\n- 仓库：https://github.com/1Panel-dev/1Panel\n- 安装类型：系统空间（root），端口 18090（固定）\n- 安装时通过向导设置安全入口、用户名与密码\n- 登录的账号信息见应用数据目录的 CREDENTIALS.txt\n`;
+const readmeText = `# 1Panel\n\n开源服务器运维管理面板，提供可视化的 Linux 服务器管理。\n\n- 版本：${meta.upstream}\n- 安装类型：系统空间（root），端口 18090（固定）\n- 安装时通过向导设置安全入口、用户名与密码\n- 登录的账号信息见应用数据目录的 CREDENTIALS.txt\n`;
 await fs.writeFile(path.join(assetDir, 'README.md'), readmeText);
 
 const detailPath = path.join(ROOT, 'apps', '1panel.json');

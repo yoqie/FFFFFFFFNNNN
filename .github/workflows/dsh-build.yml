@@ -364,7 +364,7 @@ jobs:
           - x86_64（AMD/Intel，绝大多数 NAS 与虚拟机）→ DSH_v${DSH_VERSION}_amd64.fpk
           - ARM64 → DSH_v${DSH_VERSION}_arm64.fpk
 
-          **更新内容见上游**: https://github.com/deepseek-ai/deepseek-harness
+          **版本说明**: 本包由本源跟随上游最新发布自动构建，版本号与上游一致（${DSH_VERSION}）。
 
           **安装/升级方式**:
           1. 下载与 NAS 架构对应的 fpk

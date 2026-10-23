@@ -8,7 +8,6 @@
     "编程开发"
   ],
   "maintainer": "deepseek-ai",
-  "maintainer_url": "https://github.com/deepseek-ai/deepseek-harness",
   "service_port": "3082",
   "run_as": "root",
   "install_type": "root",

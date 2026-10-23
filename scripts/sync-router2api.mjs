@@ -44,7 +44,6 @@ const UPSTREAM_REPOS = (process.env.ROUTER2API_UPSTREAM_REPO
 
 // —— 最上游作者（固定写死，不被上游 manifest 的打包者署名覆盖）——
 const MAINTAINER = 'NNNNolan';
-const MAINTAINER_URL = 'https://github.com/NNNNolan/Router2API';
 const DISPLAY_NAME = 'Router2API';
 const DESC = '.NET 10 模型路由宿主，把不同提供方的模型统一成 OpenAI 兼容接口，自带 Vue 3 管理后台。包内集成 .NET 自包含运行时与 Redis 运行态，安装即用，无需 Docker。';
 const CATEGORIES = ['AI赋能', '编程开发'];
@@ -183,7 +182,6 @@ const detail = await readJson(detailPath, {
   desc: DESC,
   categories: CATEGORIES,
   maintainer: MAINTAINER,
-  maintainer_url: MAINTAINER_URL,
   run_as: 'root',
   install_type: 'root',
   is_docker: false,
@@ -194,12 +192,13 @@ const detail = await readJson(detailPath, {
 // 改动指纹要在任何"归位/重置"之前取，作为"内容有没有真的变"的基准
 const beforeFp = fingerprint(detail);
 
-// 作者/上游信息每次强制归位到最上游，防止历史文件或上游署名把索引带偏
-if (detail.maintainer !== MAINTAINER || detail.maintainer_url !== MAINTAINER_URL) {
+// 作者署名每次强制归位到最上游，防止历史文件或上游署名把索引带偏。
+// 上游仓库地址不写进索引（避免关联误解），但作者名保留以符合许可证的署名要求。
+if (detail.maintainer !== MAINTAINER) {
   console.log(`作者归位：${detail.maintainer || '(空)'} → ${MAINTAINER}（最上游）`);
 }
 detail.maintainer = MAINTAINER;
-detail.maintainer_url = MAINTAINER_URL;
+delete detail.maintainer_url;
 if (!detail.desc) detail.desc = DESC;
 if (!detail.categories) detail.categories = CATEGORIES;
 if (!detail.service_port) detail.service_port = SERVICE_PORT;
@@ -217,7 +216,7 @@ for (const rel of releases) {
   }
   const note = rel.__repo === REPO
     ? `Router2API v${version} 飞牛 fnOS 原生包（${[...packages.keys()].sort().join('/')}），由本源从上游 ${MAINTAINER} 的最新源码自动构建。`
-    : `Router2API v${version} 飞牛 fnOS 原生包（${[...packages.keys()].sort().join('/')}），由 ${rel.__repo} 自动打包；宿主上游见 ${MAINTAINER_URL}。`;
+    : `Router2API v${version} 飞牛 fnOS 原生包（${[...packages.keys()].sort().join('/')}），由 ${rel.__repo} 自动打包。`;
   // 同版本先删后加：保证键序保持"旧→新"，且以最新一次构建的资产为准
   delete detail.releases[version];
   detail.releases[version] = {
@@ -260,10 +259,9 @@ const meta = {
   displayName: DISPLAY_NAME,
   desc: detail.desc,
   version: latest,
-  upstream: MAINTAINER_URL,
+  upstream: latest,
   categories: detail.categories,
   maintainer: detail.maintainer,
-  maintainer_url: detail.maintainer_url,
   service_port: detail.service_port,
   run_as: 'root',
   install_type: 'root',

@@ -4,7 +4,7 @@
     "name": "yoqie 跟随源",
     "author": "yoqie",
     "homepage": "https://github.com/yoqie/FFFFFFFFNNNN",
-    "description": "跟随上游官方源自动打包更新的飞牛 fnOS 第三方应用源（原生 FPK）：1Panel 面板 v2、DSH（DeepSeek Harness，amd64/arm64 双架构）、Router2API（.NET 10 模型路由宿主，作者 NNNNolan，amd64/arm64 双架构）等。个人维护，非 FnDepot 官方源。"
+    "description": "跟随上游官方源自动打包更新的飞牛 fnOS 第三方应用源（原生 FPK）：1Panel 面板 v2、DSH（DeepSeek Harness，amd64/arm64 双架构）、Router2API（.NET 10 模型路由宿主，作者 NNNNolan，amd64/arm64 双架构）等。个人维护，非任何官方源。"
   },
   "apps": {
     "1panel": {
@@ -23,7 +23,6 @@
       "readme_url": "https://raw.githubusercontent.com/yoqie/FFFFFFFFNNNN/main/assets/1panel/README.md",
       "bug_report_url": "https://github.com/yoqie/FFFFFFFFNNNN/issues",
       "maintainer": "1Panel-dev",
-      "maintainer_url": "https://github.com/1Panel-dev/1Panel",
       "distributor": "yoqie",
       "distributor_url": "https://github.com/yoqie/FFFFFFFFNNNN",
       "run_as": "root",
@@ -48,7 +47,6 @@
       "readme_url": "https://raw.githubusercontent.com/yoqie/FFFFFFFFNNNN/main/assets/dsh/README.md",
       "bug_report_url": "https://github.com/yoqie/FFFFFFFFNNNN/issues",
       "maintainer": "deepseek-ai",
-      "maintainer_url": "https://github.com/deepseek-ai/deepseek-harness",
       "distributor": "yoqie",
       "distributor_url": "https://github.com/yoqie/FFFFFFFFNNNN",
       "run_as": "root",
@@ -73,7 +71,6 @@
       "readme_url": "https://raw.githubusercontent.com/yoqie/FFFFFFFFNNNN/main/assets/Router2API/README.md",
       "bug_report_url": "https://github.com/yoqie/FFFFFFFFNNNN/issues",
       "maintainer": "NNNNolan",
-      "maintainer_url": "https://github.com/NNNNolan/Router2API",
       "distributor": "yoqie",
       "distributor_url": "https://github.com/yoqie/FFFFFFFFNNNN",
       "run_as": "root",

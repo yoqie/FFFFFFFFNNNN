@@ -2,8 +2,7 @@
 
 .NET 10 模型路由宿主：把不同提供方的模型统一成 OpenAI 兼容接口，自带 Vue 3 管理后台。本源分发的是**飞牛 fnOS 原生包**（`.fpk`，非 Docker）。
 
-- 最上游项目（作者 NNNNolan）：https://github.com/NNNNolan/Router2API
-- 构建方式：本源（FFFFFFFFNNN）的 GitHub Actions 直接从上游源码构建，amd64 + arm64 原生双架构
+- 构建方式：本源（FFFFFFFFNNN）的 GitHub Actions 从上游源码构建，amd64 + arm64 原生双架构
 - 安装类型：系统空间（root），服务端口 5242（固定）
 - 依赖：无需额外依赖——包内是 .NET 自包含运行时，并内置 redis-server（仅监听 127.0.0.1）
 - 数据目录：应用 var 目录（如 `/vol1/@appdata/Router2API`）——升级不丢配置、密钥、数据库与插件
@@ -41,6 +40,6 @@ fetch('/api/admin/api-key/raw').then(r => r.json()).then(console.log)
 ## 关于本源
 
 本仓库自行从上游源码构建并发布 fpk（tag：`Router2API-<版本>`），索引里的下载地址指向本源，不依赖任何第三方 fork。
-应用中心显示的**作者为最上游项目作者 NNNNolan**。
+应用中心显示的**作者为最上游项目作者**。
 
 发布版本号在跟随上游的基础上保证**数字段单调递增**（例如上游 `2.0.9` 重发时为 `2.0.9.1`），这样飞牛应用中心才能正确提示更新。
