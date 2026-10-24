@@ -2,4 +2,20 @@
 
 # 安装后脚本：确保应用数据目录存在，便于首次启动直接可用
 mkdir -p "${TRIM_PKGVAR}" 2>/dev/null || true
+
+# 把 manifest 交给应用用户：
+# 应用内更新（dsh-updater）只替换 node_modules，不经过飞牛安装器，
+# 而 manifest 默认属 root，运行器无法回写 version，导致应用中心 / FnDepot
+# 显示的已装版本长期停在安装时的 FPK 版本。这里放开这一个文件的写权限，
+# 让运行器能在更新成功后把 version 对齐到实际运行版本。
+# 安装器每次安装/升级都会重写 manifest，故每次回调都要重新执行。
+MANIFEST="$(cd "$(dirname "$0")/.." && pwd)/manifest"
+if [ -f "${MANIFEST}" ]; then
+    OWNER="$(stat -c '%u:%g' "${TRIM_APPDEST}" 2>/dev/null)"
+    if [ -n "${OWNER}" ]; then
+        chown "${OWNER}" "${MANIFEST}" 2>/dev/null || true
+    fi
+    chmod 644 "${MANIFEST}" 2>/dev/null || true
+fi
+
 exit 0

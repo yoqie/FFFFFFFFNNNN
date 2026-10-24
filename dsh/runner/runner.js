@@ -35,6 +35,16 @@ const SERVICE_PORT = parseInt(process.env.PORT || '3082', 10);
 
 const NODE_BIN = process.env.DSH_NODE_BIN || 'node';
 const DSH_BIN = path.join(APP_DIR, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js');
+const DSH_PKG_JSON = path.join(APP_DIR, 'node_modules', '@deepseek-ai', 'dsh', 'package.json');
+
+// 包目录里的 manifest（由 cmd/main 通过 DSH_MANIFEST 传入）。
+// 应用内更新只替换 node_modules，不经过飞牛安装器，manifest 里的 version
+// 会一直停在"当初装的 FPK 版本"，导致飞牛应用中心 / FnDepot 显示的已装版本
+// 与实际运行版本不一致（例如显示 rc.2、实际 rc.3）。这里在更新成功后把
+// manifest 对齐到实际版本；manifest 属主为 root，需要安装回调预先放开写权限。
+const MANIFEST_PATH = process.env.DSH_MANIFEST || '';
+// 记录"实际运行版本"，供排查与下次启动时补写 manifest 使用。
+const VERSION_STATE = path.join(VAR_DIR, 'installed-version.json');
 
 // umask 0：DSH 创建的文件对 NAS 用户与 SMB 完全可读写
 try { process.umask(0); } catch (e) {}
@@ -297,6 +307,112 @@ function waitDshReady(timeoutMs = 30_000) {
 }
 
 /**
+ * 读取 node_modules 里 DSH 的实际版本。
+ * @returns {string} 读不到时返回空串
+ */
+function readInstalledVersion() {
+    try {
+        return String(JSON.parse(fs.readFileSync(DSH_PKG_JSON, 'utf-8')).version || '').trim();
+    } catch (e) {
+        return '';
+    }
+}
+
+/** 解析 semver（预发布段按段比较，与上游规则一致）。 */
+function parseVersion(value) {
+    const m = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(String(value ?? '').trim());
+    if (m === null) return null;
+    return { core: [Number(m[1]), Number(m[2]), Number(m[3])], pre: m[4] === undefined ? [] : m[4].split('.') };
+}
+
+/** 版本比较：a>b 返回正数，相等 0，a<b 负数；非法返回 null。 */
+function compareVersions(a, b) {
+    const left = parseVersion(a);
+    const right = parseVersion(b);
+    if (left === null || right === null) return null;
+    for (let i = 0; i < 3; i += 1) {
+        if (left.core[i] !== right.core[i]) return left.core[i] - right.core[i];
+    }
+    if (left.pre.length === 0 && right.pre.length === 0) return 0;
+    if (left.pre.length === 0) return 1;   // 正式版 > 预发布
+    if (right.pre.length === 0) return -1;
+    const len = Math.min(left.pre.length, right.pre.length);
+    for (let i = 0; i < len; i += 1) {
+        const x = left.pre[i];
+        const y = right.pre[i];
+        const xn = /^\d+$/.test(x);
+        const yn = /^\d+$/.test(y);
+        if (xn && yn) {
+            if (Number(x) !== Number(y)) return Number(x) - Number(y);
+        } else if (xn !== yn) {
+            return xn ? -1 : 1;            // 数字段 < 字母段
+        } else if (x !== y) {
+            return x < y ? -1 : 1;
+        }
+    }
+    return left.pre.length - right.pre.length;
+}
+
+/**
+ * 把 manifest 里的 version 对齐到实际运行版本。
+ *
+ * 只前进、不回退：manifest 被改低会让飞牛把后续正常升级误判为降级而拒绝。
+ * 任何失败都只记日志，绝不影响更新流程本身。
+ *
+ * @param {string} version 实际版本
+ * @returns {{changed: boolean, reason?: string, from?: string}}
+ */
+function syncManifestVersion(version) {
+    if (!version) return { changed: false, reason: '版本未知' };
+    if (!MANIFEST_PATH) return { changed: false, reason: '未提供 manifest 路径' };
+    try {
+        if (!fs.existsSync(MANIFEST_PATH)) return { changed: false, reason: 'manifest 不存在' };
+        const text = fs.readFileSync(MANIFEST_PATH, 'utf-8');
+        const m = /^version(\s*)=\s*(.+)$/m.exec(text);
+        if (m === null) return { changed: false, reason: 'manifest 缺少 version 行' };
+        const current = m[2].trim();
+        if (current === version) return { changed: false, reason: '已一致' };
+        const cmp = compareVersions(version, current);
+        if (cmp === null) return { changed: false, reason: `版本无法比较：${current} / ${version}` };
+        if (cmp <= 0) return { changed: false, reason: `实际版本不高于 manifest（${current}），保持不动` };
+
+        // 就地改写 version 行，保留原有对齐空格；先写临时文件再 rename，避免半截文件
+        const next = text.replace(/^version(\s*)=.*$/m, (_, spacing) => `version${spacing}= ${version}`);
+        const tmp = `${MANIFEST_PATH}.tmp`;
+        fs.writeFileSync(tmp, next, { mode: 0o644 });
+        fs.renameSync(tmp, MANIFEST_PATH);
+        return { changed: true, from: current };
+    } catch (error) {
+        return { changed: false, reason: error.message };
+    }
+}
+
+/**
+ * 记录实际运行版本，并顺带对齐 manifest。
+ * @param {string} [note] 触发原因（start / update / rollback），便于排查
+ */
+function recordVersionState(note) {
+    const version = readInstalledVersion();
+    const result = syncManifestVersion(version);
+    try {
+        fs.writeFileSync(VERSION_STATE, JSON.stringify({
+            version,
+            manifest: result.changed ? version : undefined,
+            manifestSyncedFrom: result.from,
+            manifestSkipReason: result.changed ? undefined : result.reason,
+            note,
+            at: new Date().toISOString(),
+        }, null, 2));
+    } catch (e) { /* 记录失败不影响主流程 */ }
+    if (result.changed) {
+        console.log(`[Runner] manifest 版本已对齐：${result.from} → ${version}`);
+    } else if (result.reason && result.reason !== '已一致') {
+        console.log(`[Runner] manifest 版本未更新（${result.reason}）`);
+    }
+    return version;
+}
+
+/**
  * 就地更新：替换 node_modules 后重新拉起 dsh，**无需重启应用本身**。
  *
  * 可行性依据：本运行器只依赖 Node 内置模块（见文件头部 require），
@@ -337,8 +453,10 @@ async function applyUpdate(stagedDir) {
         if (ready) {
             fs.rmSync(backup, { recursive: true, force: true });
             fs.rmSync(stagedDir, { recursive: true, force: true });
+            // 新版已跑起来：把 manifest 的 version 对齐，避免飞牛/FnDepot 显示旧版本
+            const version = recordVersionState('update');
             console.log('[Runner] 更新：完成');
-            return { ok: true };
+            return { ok: true, version };
         }
 
         // 4) 启动失败则回滚
@@ -350,6 +468,8 @@ async function applyUpdate(stagedDir) {
         dshChild = startDsh();
         await waitDshReady();
         fs.rmSync(stagedDir, { recursive: true, force: true });
+        // 回滚后实际版本回到旧版，同步记录（manifest 只前进不回退，这里不会改它）
+        recordVersionState('rollback');
         return { ok: false, message: '新版启动失败，已回滚' };
     } finally {
         updating = false;
@@ -417,6 +537,9 @@ async function main() {
     }
     fs.mkdirSync(VAR_DIR, { recursive: true });
 
+    // 启动时对齐一次：应用内更新过的实例，manifest 可能仍停留在旧 FPK 版本
+    recordVersionState('start');
+
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
 
@@ -432,4 +555,9 @@ async function main() {
     console.log(`[Runner] 启动完成 (app=${APP_DIR}, var=${VAR_DIR})`);
 }
 
-main();
+// 作为主模块运行时才启动服务；被 require 时只暴露内部函数，便于单测。
+if (require.main === module) {
+    main();
+}
+
+module.exports = { compareVersions, syncManifestVersion, recordVersionState, readInstalledVersion };

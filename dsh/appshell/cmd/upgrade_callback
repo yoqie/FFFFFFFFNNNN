@@ -1,4 +1,15 @@
 #!/bin/bash
 
-# 升级后脚本：无需额外操作，应用中心会在升级完成后自动启动服务
+# 升级后脚本：应用中心会在升级完成后自动启动服务
+# 升级会重写 manifest（属 root），这里重新把它交给应用用户，
+# 以便运行器在应用内更新后能回写 version（详见 install_callback 的说明）。
+MANIFEST="$(cd "$(dirname "$0")/.." && pwd)/manifest"
+if [ -f "${MANIFEST}" ]; then
+    OWNER="$(stat -c '%u:%g' "${TRIM_APPDEST}" 2>/dev/null)"
+    if [ -n "${OWNER}" ]; then
+        chown "${OWNER}" "${MANIFEST}" 2>/dev/null || true
+    fi
+    chmod 644 "${MANIFEST}" 2>/dev/null || true
+fi
+
 exit 0

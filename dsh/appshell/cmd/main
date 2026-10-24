@@ -231,6 +231,9 @@ start_process() {
     export DSH_PORT="${INTERNAL_PORT}"
     export TRIM_APPDEST="${TRIM_APPDEST}"
     export TRIM_PKGVAR="${TRIM_PKGVAR}"
+    # manifest 位于包目录（本脚本所在目录的上一级），不在 TRIM_APPDEST（内容目录）里。
+    # 传给运行器，供其在应用内更新成功后把 version 对齐到实际运行版本。
+    export DSH_MANIFEST="$(cd "$(dirname "$0")/.." && pwd)/manifest"
 
     # 以数据目录为工作目录启动运行器
     cd "${DSH_DATA_DIR}" || return 1
