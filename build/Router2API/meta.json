@@ -2,8 +2,8 @@
   "slug": "Router2API",
   "displayName": "Router2API",
   "desc": ".NET 10 模型路由宿主，把不同提供方的模型统一成 OpenAI 兼容接口，自带 Vue 3 管理后台。包内集成 .NET 自包含运行时与 Redis 运行态，安装即用，无需 Docker。",
-  "version": "2.1.0",
-  "upstream": "2.1.0",
+  "version": "2.1.1",
+  "upstream": "2.1.1",
   "categories": [
     "AI赋能",
     "编程开发"
