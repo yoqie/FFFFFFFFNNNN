@@ -28,6 +28,11 @@ UPSTREAM_DIR="${UPSTREAM_DIR:?请设置 UPSTREAM_DIR 为上游 deepseek-harness 
 STAGE_DIR="${STAGE_DIR:?请设置 STAGE_DIR 为组装输出目录}"
 # 上游构建出的版本号，用于写入 manifest
 DSH_VERSION="${DSH_VERSION:-0.0.0-dev}"
+# 可选：上游工作区包 @deepseek-ai/dsh-official-bundles 的 tgz。
+# dsh 的 lib 里有顶层静态 import 引用它（见 profile-boot-*.js），
+# 而 npm 对 optionalDependencies、或 registry 上不存在的版本会"静默跳过"，
+# 于是 install 成功、装到 NAS 上 dsh web 一启动就 ERR_MODULE_NOT_FOUND。
+DSH_BUNDLES_TGZ="${DSH_BUNDLES_TGZ:-}"
 
 APP_PKG="${STAGE_DIR}/DSH"
 # 应用运行内容目录：fnpack 打包为 app.tgz，安装后即 TRIM_APPDEST
@@ -91,6 +96,19 @@ cat > "${APP_CONTENT}/package.json" <<EOF
   }
 }
 EOF
+# 官方 bundle 集合（可选）：有 tgz 就以 file: 依赖钉进应用。
+# 上游只在 monorepo 内用 workspace 链接，npm 上未必有对应版本；
+# 一旦被 npm 静默跳过，运行期就是 ERR_MODULE_NOT_FOUND，故显式随包安装。
+if [ -n "${DSH_BUNDLES_TGZ}" ]; then
+    [ -f "${DSH_BUNDLES_TGZ}" ] || { echo "FATAL: DSH_BUNDLES_TGZ 不存在: ${DSH_BUNDLES_TGZ}" >&2; exit 1; }
+    (cd "${APP_CONTENT}" && node -e '
+        const fs = require("fs");
+        const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+        pkg.dependencies["@deepseek-ai/dsh-official-bundles"] = "file:" + process.argv[1];
+        fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
+    ' "${DSH_BUNDLES_TGZ}")
+    echo "    随包安装官方 bundle 集合: ${DSH_BUNDLES_TGZ}"
+fi
 # 用 npm 安装（扁平无软链）：飞牛安装器对含软链的包会报
 # "设置目录权限失败"，npm 的扁平布局可规避；安装后仍会做软链清理兜底。
 echo "==> npm 版本: $(npm --version 2>/dev/null || echo N/A)"
@@ -137,6 +155,69 @@ if [ ${INSTALL_EXIT} -ne 0 ]; then
     echo "FATAL: npm install 失败 (exit ${INSTALL_EXIT})" >&2
     exit ${INSTALL_EXIT}
 fi
+
+# ---- 顶层静态 import 校验（防"装得上、点开就崩"）----
+# 背景：dsh 的 lib 里有顶层静态 import（如 profile-boot-*.js 引
+# @deepseek-ai/dsh-official-bundles）。这类 import 在模块链接阶段就要解析，
+# 而 npm 对 optionalDependencies / registry 上不存在的版本会静默跳过，
+# install 仍然 exit 0。产物发到 NAS 后 dsh web 一启动就
+# ERR_MODULE_NOT_FOUND，用户看到的是"启动失败：进程在 1 秒内退出"。
+# 这里按 Node 的真实解析逐条验证，缺了先补装，补不上就让构建失败。
+echo "==> 校验 dsh 顶层静态 import 的 @deepseek-ai/* 依赖"
+cat > "${APP_CONTENT}/.dsh-resolve-check.mjs" <<'CHECK'
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = path.dirname(fileURLToPath(import.meta.url));
+const libDir = path.join(root, 'node_modules', '@deepseek-ai', 'dsh', 'lib');
+if (!existsSync(libDir)) process.exit(0);
+
+// 只认行首的静态 import/export ... from（含跨行写法）。函数体内的动态
+// import(...) 一般有 try/catch 兜底，算进来会误报、把构建卡死。
+const PATTERNS = [
+  /^import\s*(?:[^;("']{0,300}?)from\s*["'](@deepseek-ai\/[^"']+)["']/gm,
+  /^export\s*(?:[^;("']{0,300}?)from\s*["'](@deepseek-ai\/[^"']+)["']/gm,
+  /^import\s*["'](@deepseek-ai\/[^"']+)["']/gm,
+];
+const specs = new Set();
+
+const walk = (dir) => {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) walk(full);
+    else if (entry.name.endsWith('.js')) {
+      const src = readFileSync(full, 'utf8');
+      for (const re of PATTERNS) for (const m of src.matchAll(re)) specs.add(m[1]);
+    }
+  }
+};
+walk(libDir);
+
+const missing = [];
+for (const spec of [...specs].sort()) {
+  try { import.meta.resolve(spec); } catch { missing.push(spec); }
+}
+process.stdout.write(missing.join(' '));
+CHECK
+MISSING=$(node "${APP_CONTENT}/.dsh-resolve-check.mjs" 2>/dev/null || true)
+if [ -n "${MISSING}" ]; then
+    echo "WARN: 静态 import 解析不到，尝试补装: ${MISSING}" >&2
+    for spec in ${MISSING}; do
+        (cd "${APP_CONTENT}" && npm install --no-save --no-package-lock --omit=dev \
+            --no-audit --no-fund --loglevel=error "${spec}") || true
+    done
+    MISSING=$(node "${APP_CONTENT}/.dsh-resolve-check.mjs" 2>/dev/null || true)
+    if [ -n "${MISSING}" ]; then
+        echo "FATAL: dsh 运行时依赖仍缺失：${MISSING}" >&2
+        echo "       这些包被 dsh 顶层静态 import，缺了 dsh web 启动即 ERR_MODULE_NOT_FOUND，" >&2
+        echo "       表现为应用装得上、一点开就退出。上游若只在 monorepo 内链接该包，" >&2
+        echo "       请在上游 pnpm --filter <包名> pack 后用 DSH_BUNDLES_TGZ 传进来。" >&2
+        exit 1
+    fi
+fi
+rm -f "${APP_CONTENT}/.dsh-resolve-check.mjs"
+echo "    静态 import 校验通过"
 
 # runner.js：自研运行器
 cp "${REPO_ROOT}/runner/runner.js" "${APP_CONTENT}/bin/runner.js"

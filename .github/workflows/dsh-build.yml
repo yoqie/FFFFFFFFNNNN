@@ -170,15 +170,34 @@ jobs:
           echo "=== [C] pack tgz 开始 ==="
           mkdir -p ../tgz
           pnpm --filter @deepseek-ai/dsh pack --pack-destination ../tgz
-          DSH_TGZ="${GITHUB_WORKSPACE}/tgz/$(ls ../tgz | head -1)"
+          # 用前缀精确取，避免目录里多出别的 tgz 时取错（pnpm pack 命名为
+          # deepseek-ai-dsh-<version>.tgz）
+          DSH_TGZ="${GITHUB_WORKSPACE}/tgz/$(ls ../tgz | grep -E '^deepseek-ai-dsh-[0-9]' | head -1)"
+          if [ ! -f "${DSH_TGZ}" ]; then
+            echo "::error::未找到 dsh 的 tgz"; ls -la ../tgz; exit 1
+          fi
           echo "DSH_TGZ=${DSH_TGZ}" >> "$GITHUB_ENV"
+          # @deepseek-ai/dsh-official-bundles：被 dsh 的 profile-boot 顶层静态
+          # import 的官方 bundle 集合。上游只在 monorepo 里用 workspace 链接，
+          # npm 上未必有对应版本，npm install 会静默跳过 → 产物到 NAS 上
+          # dsh web 启动即 ERR_MODULE_NOT_FOUND。这里从上游工作区直接 pack，
+          # 由 assemble-dsh.sh 以 file: 依赖随包安装。
+          if pnpm --filter @deepseek-ai/dsh-official-bundles pack --pack-destination ../tgz >/dev/null 2>&1; then
+            BUNDLES_TGZ="${GITHUB_WORKSPACE}/tgz/$(ls ../tgz | grep -E '^deepseek-ai-dsh-official-bundles-' | head -1)"
+            echo "DSH_BUNDLES_TGZ=${BUNDLES_TGZ}" >> "$GITHUB_ENV"
+            echo "已 pack 官方 bundle 集合: ${BUNDLES_TGZ}"
+          else
+            BUNDLES_TGZ=""
+            echo "::warning::上游工作区没有 @deepseek-ai/dsh-official-bundles（或 pack 失败），改由 npm 解析"
+          fi
           # 上游偶发引用尚未发布到 npm 的包（新 experimental 包常滞后发布）。
           # npm install 处理 file: tgz 时会解析 tgz 内部的 dependencies，
           # 因此必须在 tgz 内剔除这些包，否则安装必然 E404。
           # 做法：解开 tgz → 从 package.json 剔除 npm 上不存在的依赖 → 重新打包。
           # 注意：GITHUB_ENV 只对后续步骤生效，本步骤内须以参数显式传路径。
           # node - 从 stdin 读脚本（heredoc），tgz 路径经 argv[1] 传入。
-          node - "$DSH_TGZ" <<'EOF'
+          for TGZ in "${DSH_TGZ}" ${BUNDLES_TGZ:+"${BUNDLES_TGZ}"}; do
+          node - "$TGZ" <<'EOF'
           const { execSync } = require('child_process');
           const fs = require('fs');
           const os = require('os');
@@ -213,6 +232,7 @@ jobs:
           }
           fs.rmSync(tmp, { recursive: true, force: true });
           EOF
+          done
           echo "=== [C] pack tgz 完成: $(ls -la ../tgz) ==="
 
       - name: 安装 fnpack（飞牛官方打包工具，按架构取二进制）
@@ -235,12 +255,15 @@ jobs:
         env:
           DSH_VERSION: ${{ steps.ver.outputs.version }}
           DSH_TGZ: ${{ env.DSH_TGZ }}
+          # 官方 bundle 集合（上游工作区 pack 出来的 tgz，可能为空）
+          DSH_BUNDLES_TGZ: ${{ env.DSH_BUNDLES_TGZ }}
           # TARGET_ARCH/NODE_ARCH 已在 job 级 env 定义，assemble.sh 读取 TARGET_ARCH
           TARGET_ARCH: ${{ matrix.arch }}
         run: |
           STAGE_DIR="${GITHUB_WORKSPACE}/stage" \
           UPSTREAM_DIR="${GITHUB_WORKSPACE}/upstream" \
           DSH_TGZ="${DSH_TGZ}" \
+          DSH_BUNDLES_TGZ="${DSH_BUNDLES_TGZ:-}" \
             bash scripts/assemble-dsh.sh
 
       - name: 调试快照（始终执行，便于远程诊断）
@@ -250,6 +273,7 @@ jobs:
             echo "== stage/DSH 顶层 =="; ls -la stage/DSH/ 2>/dev/null
             echo "== app 顶层 =="; ls -la stage/DSH/app/ 2>/dev/null
             echo "== dsh 本体 =="; ls stage/DSH/app/node_modules/@deepseek-ai/dsh/lib/bin.js 2>/dev/null
+            echo "== @deepseek-ai 已装包 =="; ls stage/DSH/app/node_modules/@deepseek-ai/ 2>/dev/null
             echo "== 软链数量 =="; find stage/DSH -type l 2>/dev/null | wc -l
             echo "== .node 产物分布 =="; find stage/DSH -name "*.node" 2>/dev/null | grep -oE '(linux|darwin|win32)-(x64|arm64)[^/]*' | sort | uniq -c
           } > debug-snapshot.txt 2>&1 || true
