@@ -20,17 +20,17 @@
         "x86": {
           "version": "2.1.2",
           "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/Router2API-2.1.2/Router2API_v2.1.2_amd64.fpk",
-          "sha256": "6bb0d22c1d43f4f93e0010ac68edcd6956b25cccd3905aa9dbd4e9f7e0359e20",
-          "size": 73646469
+          "sha256": "ce090fae2f5cb8356d150fc7c4ba92987a07b42589541f6f41adb1946f082135",
+          "size": 73646431
         },
         "arm": {
           "version": "2.1.2",
           "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/Router2API-2.1.2/Router2API_v2.1.2_arm64.fpk",
-          "sha256": "afa9cb22c91c3a2282ff9d2b0f19feebe04dd4e24103fa8b7f6b3a8ce5f0daf5",
-          "size": 70899327
+          "sha256": "0816af9077bede848c806fa0b7a5bff7a17b2ccd047ac2f996b5c7797f53932f",
+          "size": 70901363
         }
       }
     }
   },
-  "updated_at": "2026-10-25T08:00:13.031Z"
+  "updated_at": "2026-10-25T08:06:12.329Z"
 }
