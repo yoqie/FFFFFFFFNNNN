@@ -12,15 +12,21 @@
 
 管理后台的「配置中心 → 替换 API Key」那个输入框只用于**替换**，已存在的 Key 不会回显明文（上游设计如此，那里只显示「当前状态：已配置」）。
 
-**方式一（最简单，不需要 root）：**
+**方式一（应用用户 / 属组成员可直接看）：**
 
-应用启动时会把 Key 另存一份可读副本，用文件管理器或任意账号直接查看即可：
+应用启动时会把 Key 另存一份副本，权限 **0640**（属主:属组 = 应用用户）：
 
 ```
 /vol1/@appdata/Router2API/API-KEY.txt
 ```
 
-**方式二（命令行，也不需要 root）：**
+只有应用用户本人、或属于应用属组的账号能读。其他账号请用下面两种方式之一，或把自己加入属组后重新登录：
+
+```sh
+sudo usermod -aG "$(stat -c %G /vol1/@appdata/Router2API/API-KEY.txt)" "$(id -un)"
+```
+
+**方式二（命令行，应用用户 / 属组成员）：**
 
 ```sh
 /var/apps/Router2API/cmd/show-api-key          # 带说明的完整输出
@@ -40,6 +46,7 @@ fetch('/api/admin/api-key/raw').then(r => r.json()).then(console.log)
 
 > Key 的权威来源是 `/vol1/@appdata/Router2API/Config/Config.json` 的 `Auth.ApiKey.Key`，该文件权限 600、属主为应用用户，普通账号读不到——这正是 `API-KEY.txt` 存在的意义。
 > 在管理后台**改过** Key 之后，重启一次应用，`API-KEY.txt` 会自动更新。
+> 该副本固定为 0640：不会写成 0644，也不会为了"看得见"放宽权限——需要更高便利时请用 root 读 `Config.json`。
 
 ## 关于本源
 

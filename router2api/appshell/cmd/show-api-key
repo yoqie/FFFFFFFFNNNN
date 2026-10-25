@@ -5,8 +5,9 @@
 # 已存在的 Key 不会回显明文（上游设计如此），所以需要本机取明文的方式。
 #
 # 两种来源，按可用性自动选择，通常**都不需要 root**：
-#   1. API-KEY.txt —— 应用启动时把 Key 另存的一份可读副本（0644），
-#      位于应用数据目录，例如 /vol1/@appdata/Router2API/API-KEY.txt
+#   1. API-KEY.txt —— 应用启动时把 Key 另存的一份副本（0640，属主:属组 = 应用用户），
+#      位于应用数据目录，例如 /vol1/@appdata/Router2API/API-KEY.txt。
+#      只有应用用户本人、或属于应用属组的账号能读；其他账号需要 root。
 #   2. Config/Config.json —— 权威来源，但权限 600，只有应用用户或 root 能读。
 #      当前用户可读时优先用它，拿到的一定是最新值。
 #
@@ -111,16 +112,18 @@ if [ -z "${KEY}" ]; then
         exit 1
     fi
     if [ "${cfg_rc}" -eq 2 ] && [ "${side_rc}" -eq 2 ]; then
-        echo "没有读取权限：${CFG}（600，属主为应用用户）与 ${SIDECAR}" >&2
+        echo "没有读取权限：${CFG}（600）与 ${SIDECAR}（640），二者都只对应用用户/属组开放。" >&2
         echo "当前身份：$(id -un 2>/dev/null || echo '?')" >&2
-        echo "请改用：sudo $0" >&2
+        echo "任选其一：" >&2
+        echo "  - 用 root 执行：sudo $0" >&2
+        echo "  - 把自己的账号加入应用属组后重新登录：sudo usermod -aG \$(stat -c %G ${SIDECAR}) \$(id -un)" >&2
         exit 1
     fi
     if [ "${cfg_rc}" -eq 2 ] && [ ! -f "${SIDECAR}" ]; then
         echo "没有读取权限：${CFG}（600，属主为应用用户），且可读副本不存在。" >&2
         echo "当前身份：$(id -un 2>/dev/null || echo '?')" >&2
         echo "任选其一：" >&2
-        echo "  - 重启一次 Router2API，启动时会生成可读副本 ${SIDECAR}" >&2
+        echo "  - 重启一次 Router2API，启动时会生成副本 ${SIDECAR}（640）" >&2
         echo "  - 用 root 执行：sudo $0" >&2
         exit 1
     fi

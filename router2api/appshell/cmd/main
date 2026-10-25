@@ -378,10 +378,9 @@ PYEOF
 # 必须 sudo —— 而飞牛很多场景下用户没有可用的 root shell。
 #
 # 做法：启动时（本脚本以应用用户身份运行，对 Config.json 有读权限）
-# 把 Key 写到应用数据目录下的 API-KEY.txt，权限 0644。
-# 权衡：同机其他用户也能读到这个 Key。对个人 NAS 而言，能登录 shell 的账号
-# 本就处于高信任区；相较"取不到 Key 导致客户端配不起来"，这个取舍是值得的。
-# 不接受这一点的话，可以删掉本函数、继续用 sudo 读 Config.json。
+# 把 Key 写到应用数据目录下的 API-KEY.txt，权限 0640（属主:属组 = 应用用户）。
+# 即：只有应用用户本身、以及属于应用属组的账号能读，其他账号读不到。
+# 需要放宽时不要改这里，直接用 root 读 Config.json（见 cmd/show-api-key）。
 export_api_key_sidecar() {
     local cfg_file
     cfg_file=$(config_file_path)
@@ -397,25 +396,25 @@ export_api_key_sidecar() {
 
     # 内容变化才重写，避免每次启动都改动文件时间戳
     if [ -f "${sidecar}" ] && grep -qxF "${key}" "${sidecar}" 2>/dev/null; then
-        chmod 644 "${sidecar}" 2>/dev/null || true
+        chmod 640 "${sidecar}" 2>/dev/null || true
         return 0
     fi
 
     {
         echo "# Router2API 下游 API Key"
         echo "# 客户端里填到 API Key，或用请求头：Authorization: Bearer <key>"
-        echo "# 本文件由应用启动时自动生成，权限 0644（Config.json 本身是 600）"
+        echo "# 本文件由应用启动时自动生成，权限 0640（属主:属组 = 应用用户）"
         echo "# 在管理后台「配置中心 → 替换 API Key」改过之后，重启应用即可更新本文件"
         echo
         printf '%s\n' "${key}"
     } > "${sidecar}" 2>/dev/null || return 0
 
-    chmod 644 "${sidecar}" 2>/dev/null || true
+    chmod 640 "${sidecar}" 2>/dev/null || true
     # 属主跟随 Config 目录（应用用户），便于应用自身后续覆盖
     local owner
     owner=$(stat -c '%u:%g' "$(dirname "${cfg_file}")" 2>/dev/null)
     [ -n "${owner}" ] && chown "${owner}" "${sidecar}" 2>/dev/null || true
-    log_msg "API-KEY.txt written (0644)"
+    log_msg "API-KEY.txt written (0640)"
     return 0
 }
 
