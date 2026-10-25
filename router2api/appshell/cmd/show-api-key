@@ -2,75 +2,169 @@
 # 显示 Router2API 当前的下游 API Key（用于把 Key 填进各种客户端）。
 #
 # 背景：管理后台的「配置中心 → 替换 API Key」只提供**替换**用途，
-# 已存在的 Key 不会回显明文（上游设计如此），所以需要一个本机取明文的方式。
+# 已存在的 Key 不会回显明文（上游设计如此），所以需要本机取明文的方式。
 #
-# 用法（在 NAS 上以 root 执行）：
-#   sudo /var/apps/Router2API/cmd/show-api-key
-#   sudo /var/apps/Router2API/cmd/show-api-key --quiet   # 只输出 Key 本身，便于管道复制
+# 两种来源，按可用性自动选择，通常**都不需要 root**：
+#   1. API-KEY.txt —— 应用启动时把 Key 另存的一份可读副本（0644），
+#      位于应用数据目录，例如 /vol1/@appdata/Router2API/API-KEY.txt
+#   2. Config/Config.json —— 权威来源，但权限 600，只有应用用户或 root 能读。
+#      当前用户可读时优先用它，拿到的一定是最新值。
 #
-# Key 存在应用数据目录的 Config/Config.json 的 Auth.ApiKey.Key 字段里，
-# 该文件权限 600、属主为应用用户，因此需要 root。
+# 用法：
+#   /var/apps/Router2API/cmd/show-api-key
+#   /var/apps/Router2API/cmd/show-api-key --quiet   # 只输出 Key 本身，便于管道复制
+#   /var/apps/Router2API/cmd/show-api-key --json    # JSON 输出，便于脚本消费
 
-set -eu
+set -u
 
 QUIET=0
-[ "${1:-}" = "--quiet" ] && QUIET=1
+JSON=0
+for arg in "$@"; do
+    case "${arg}" in
+        --quiet|-q) QUIET=1 ;;
+        --json)     JSON=1 ;;
+        --help|-h)
+            sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'
+            exit 0 ;;
+    esac
+done
 
-# 数据目录：优先用飞牛注入的 PKGVAR，否则按常见卷号兜底
-if [ -n "${TRIM_PKGVAR:-}" ] && [ -d "${TRIM_PKGVAR}" ]; then
-    PKGVAR="${TRIM_PKGVAR}"
-else
+# ---------------------------------------------------------------- 定位数据目录
+# 优先用飞牛注入的 TRIM_PKGVAR；手工执行时它通常为空，按卷号兜底。
+PKGVAR="${TRIM_PKGVAR:-}"
+if [ -z "${PKGVAR}" ] || [ ! -d "${PKGVAR}" ]; then
     PKGVAR=""
     for base in /vol*/@appdata/Router2API; do
-        [ -d "$base" ] && PKGVAR="$base" && break
+        [ -d "${base}" ] && PKGVAR="${base}" && break
     done
 fi
-
-CFG="${PKGVAR:-/vol1/@appdata/Router2API}/Config/Config.json"
-
-if [ ! -f "${CFG}" ]; then
-    echo "找不到配置文件：${CFG}" >&2
-    echo "（应用可能尚未启动过；启动一次后会生成）" >&2
+if [ -z "${PKGVAR}" ]; then
+    echo "找不到 Router2API 应用数据目录（/vol*/@appdata/Router2API）。" >&2
+    echo "应用可能尚未安装或从未启动。" >&2
     exit 1
 fi
 
-KEY=$(python3 - "$CFG" <<'PYEOF' 2>/dev/null
-import json, sys
+CFG="${PKGVAR}/Config/Config.json"
+SIDECAR="${PKGVAR}/API-KEY.txt"
+
+# ---------------------------------------------------------------- 从 Config 读
+# 成功时输出 Key 并返回 0；读不到（无文件/无权限/无该字段）返回非 0
+key_from_config() {
+    [ -f "${CFG}" ] || return 1
+    [ -r "${CFG}" ] || return 2
+
+    if command -v python3 >/dev/null 2>&1; then
+        CFG_FILE="${CFG}" python3 - <<'PYEOF'
+import json, os, sys
 try:
-    with open(sys.argv[1], encoding="utf-8") as fh:
+    with open(os.environ["CFG_FILE"], encoding="utf-8") as fh:
         cfg = json.load(fh)
     key = cfg.get("Auth", {}).get("ApiKey", {}).get("Key", "") or ""
 except Exception:
-    key = ""
-print(key)
+    sys.exit(1)
+if not key:
+    sys.exit(1)
+sys.stdout.write(key + "\n")
 PYEOF
-)
+        return $?
+    fi
 
-if [ -z "${KEY}" ]; then
-    echo "配置里没有 API Key（Auth.ApiKey.Key 为空）。" >&2
-    echo "可在管理后台「配置中心 → 替换 API Key」里设置一个，或重启应用自动生成。" >&2
-    exit 2
+    # 没有 python3 时正则兜底：Config.json 里 "Key" 只出现在 Auth.ApiKey 下
+    key=$(sed -n 's/.*"Key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${CFG}" 2>/dev/null | head -n 1)
+    [ -n "${key}" ] || return 1
+    printf '%s\n' "${key}"
+    return 0
+}
+
+# ---------------------------------------------------------------- 从副本读
+key_from_sidecar() {
+    [ -f "${SIDECAR}" ] || return 1
+    [ -r "${SIDECAR}" ] || return 2
+    # 副本前几行是注释，Key 是最后一行非空内容
+    key=$(grep -v '^[[:space:]]*#' "${SIDECAR}" 2>/dev/null | grep -v '^[[:space:]]*$' | tail -n 1)
+    [ -n "${key}" ] || return 1
+    printf '%s\n' "${key}"
+    return 0
+}
+
+KEY=""
+SOURCE=""
+cfg_rc=1
+side_rc=1
+
+if out=$(key_from_config); then
+    KEY="${out}"; SOURCE="Config/Config.json"
+else
+    cfg_rc=$?
+    if out=$(key_from_sidecar); then
+        KEY="${out}"; SOURCE="API-KEY.txt"
+    else
+        side_rc=$?
+    fi
 fi
 
+if [ -z "${KEY}" ]; then
+    # ---- 按情况给出可执行的提示，不要笼统说"没有 Key" ----
+    if [ ! -f "${CFG}" ] && [ ! -f "${SIDECAR}" ]; then
+        echo "未找到配置文件：${CFG}" >&2
+        echo "应用可能尚未启动过；启动一次后会生成配置与 API-KEY.txt。" >&2
+        exit 1
+    fi
+    if [ "${cfg_rc}" -eq 2 ] && [ "${side_rc}" -eq 2 ]; then
+        echo "没有读取权限：${CFG}（600，属主为应用用户）与 ${SIDECAR}" >&2
+        echo "当前身份：$(id -un 2>/dev/null || echo '?')" >&2
+        echo "请改用：sudo $0" >&2
+        exit 1
+    fi
+    if [ "${cfg_rc}" -eq 2 ] && [ ! -f "${SIDECAR}" ]; then
+        echo "没有读取权限：${CFG}（600，属主为应用用户），且可读副本不存在。" >&2
+        echo "当前身份：$(id -un 2>/dev/null || echo '?')" >&2
+        echo "任选其一：" >&2
+        echo "  - 重启一次 Router2API，启动时会生成可读副本 ${SIDECAR}" >&2
+        echo "  - 用 root 执行：sudo $0" >&2
+        exit 1
+    fi
+    if [ "${cfg_rc}" -eq 0 ] || { [ -f "${CFG}" ] && [ -r "${CFG}" ]; }; then
+        echo "配置里没有 API Key（Auth.ApiKey.Key 为空）。" >&2
+        echo "可在管理后台「配置中心 → 替换 API Key」里设置一个，或重启应用自动生成。" >&2
+        exit 2
+    fi
+    echo "未能在以下位置取到 API Key：" >&2
+    echo "  - ${CFG}" >&2
+    echo "  - ${SIDECAR}" >&2
+    echo "可重启一次应用让其生成 API-KEY.txt，或用 root 直接读配置文件。" >&2
+    exit 1
+fi
+
+# ---------------------------------------------------------------- 输出
 if [ "${QUIET}" = "1" ]; then
     printf '%s\n' "${KEY}"
     exit 0
 fi
 
-ENABLED=$(python3 - "$CFG" <<'PYEOF' 2>/dev/null
-import json, sys
+ENABLED="未知"
+if [ -r "${CFG}" ] && command -v python3 >/dev/null 2>&1; then
+    ENABLED=$(CFG_FILE="${CFG}" python3 - <<'PYEOF' 2>/dev/null
+import json, os
 try:
-    with open(sys.argv[1], encoding="utf-8") as fh:
+    with open(os.environ["CFG_FILE"], encoding="utf-8") as fh:
         cfg = json.load(fh)
     print("已启用" if cfg.get("Auth", {}).get("ApiKey", {}).get("Enabled") else "已停用")
 except Exception:
     print("未知")
 PYEOF
 )
+fi
+
+if [ "${JSON}" = "1" ]; then
+    printf '{"key":"%s","enabled":"%s","source":"%s"}\n' "${KEY}" "${ENABLED}" "${SOURCE}"
+    exit 0
+fi
 
 echo "Router2API 下游 API Key（状态：${ENABLED}）"
 echo "-----------------------------------------------"
 printf '%s\n' "${KEY}"
 echo "-----------------------------------------------"
+echo "来源：${SOURCE}"
 echo "配置文件：${CFG}"
-echo "客户端里把它填到 API Key / Authorization: Bearer <key> 处即可。"
+echo "客户端里把它填到 API Key，或用请求头：Authorization: Bearer <key>"

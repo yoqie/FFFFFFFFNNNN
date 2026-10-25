@@ -350,6 +350,75 @@ sys.exit(0 if node not in (None, "", []) else 1)
 PYEOF
 }
 
+# 读取配置里的下游 API Key。
+# 优先 python3 精确解析；没有 python3 时退回正则（Config.json 里 "Key" 只出现
+# 在这一处：Auth.ApiKey.Key，Admin 用户用的是 Password/PasswordHash）。
+read_api_key() {
+    local cfg_file="$1"
+    [ -f "${cfg_file}" ] || return 0
+    if command -v python3 >/dev/null 2>&1; then
+        CFG_FILE="${cfg_file}" python3 - <<'PYEOF' 2>/dev/null
+import json, os
+try:
+    with open(os.environ["CFG_FILE"], encoding="utf-8") as fh:
+        cfg = json.load(fh)
+    print(cfg.get("Auth", {}).get("ApiKey", {}).get("Key", "") or "")
+except Exception:
+    pass
+PYEOF
+        return 0
+    fi
+    sed -n 's/.*"Key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${cfg_file}" 2>/dev/null | head -n 1
+}
+
+# 把 API Key 另存一份"可读副本"，让取 Key 不再需要 root。
+#
+# 背景：上游把 Key 只放在 Config/Config.json，且该文件是 600、属主为应用用户。
+# 用户在 NAS 上以普通账号执行 cmd/show-api-key 会读不到（报权限错误），
+# 必须 sudo —— 而飞牛很多场景下用户没有可用的 root shell。
+#
+# 做法：启动时（本脚本以应用用户身份运行，对 Config.json 有读权限）
+# 把 Key 写到应用数据目录下的 API-KEY.txt，权限 0644。
+# 权衡：同机其他用户也能读到这个 Key。对个人 NAS 而言，能登录 shell 的账号
+# 本就处于高信任区；相较"取不到 Key 导致客户端配不起来"，这个取舍是值得的。
+# 不接受这一点的话，可以删掉本函数、继续用 sudo 读 Config.json。
+export_api_key_sidecar() {
+    local cfg_file
+    cfg_file=$(config_file_path)
+    local sidecar="${WORK_DIR}/API-KEY.txt"
+
+    local key
+    key=$(read_api_key "${cfg_file}" | tr -d '\r\n')
+    if [ -z "${key}" ]; then
+        # Key 还没生成（例如本次启动前配置缺失），清掉可能过期的副本
+        rm -f "${sidecar}" 2>/dev/null || true
+        return 0
+    fi
+
+    # 内容变化才重写，避免每次启动都改动文件时间戳
+    if [ -f "${sidecar}" ] && grep -qxF "${key}" "${sidecar}" 2>/dev/null; then
+        chmod 644 "${sidecar}" 2>/dev/null || true
+        return 0
+    fi
+
+    {
+        echo "# Router2API 下游 API Key"
+        echo "# 客户端里填到 API Key，或用请求头：Authorization: Bearer <key>"
+        echo "# 本文件由应用启动时自动生成，权限 0644（Config.json 本身是 600）"
+        echo "# 在管理后台「配置中心 → 替换 API Key」改过之后，重启应用即可更新本文件"
+        echo
+        printf '%s\n' "${key}"
+    } > "${sidecar}" 2>/dev/null || return 0
+
+    chmod 644 "${sidecar}" 2>/dev/null || true
+    # 属主跟随 Config 目录（应用用户），便于应用自身后续覆盖
+    local owner
+    owner=$(stat -c '%u:%g' "$(dirname "${cfg_file}")" 2>/dev/null)
+    [ -n "${owner}" ] && chown "${owner}" "${sidecar}" 2>/dev/null || true
+    log_msg "API-KEY.txt written (0644)"
+    return 0
+}
+
 # 写配置文件。已有文件时是"合并更新"，不丢掉用户自己加的字段。
 write_config() {
     local cfg_file="$1" user="$2" pass="$3" key="$4"
@@ -835,6 +904,9 @@ do_start() {
     sync_derived_config
     # 让桌面入口跟随实际端口（用户可能改过向导里的端口）
     sync_ui_port
+    # 把 API Key 另存一份可读副本：Config.json 是 600，普通用户读不到，
+    # 而取 Key 不该需要 root（详见 export_api_key_sidecar 的说明）
+    export_api_key_sidecar
 
     # 先起 Redis：主程序启动即连 Redis，顺序反了会报错
     start_redis || return 1
