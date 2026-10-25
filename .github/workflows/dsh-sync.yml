@@ -59,17 +59,16 @@ jobs:
           node scripts/update-index.mjs
 
       - name: 提交并推送
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          MIRROR: ${{ github.event.inputs.mirror }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-          if git diff --cached --quiet; then
-            echo "索引无变化"
-            exit 0
-          fi
+          set -euo pipefail
           VERSION=""
           if [ -f build/dsh/meta.json ]; then VERSION=$(node -p "require('./build/dsh/meta.json').version"); fi
-          git commit -m "chore: sync DSH ${VERSION}"
-          # 多个工作流可能同时在改索引，推送前先变基
-          git pull --rebase --autostash || true
-          git push
+          # 索引文件都是脚本生成的：并发冲突时以最新远端为基准重新生成再推，
+          # 不再用 pull --rebase（冲突会把 HEAD 留在 detached，push 直接 fatal）
+          bash scripts/push-index.sh \
+            --message "chore: sync DSH ${VERSION}" \
+            --regen 'node scripts/sync-dsh.mjs; MIRROR_ARGS=""; if [ "${MIRROR:-}" = "all" ]; then MIRROR_ARGS="--all"; fi; node scripts/mirror-dsh.mjs ${MIRROR_ARGS}; if [ -z "${MIRROR_ARGS}" ]; then node scripts/prune-releases.mjs --slug dsh; fi; node scripts/update-index.mjs'

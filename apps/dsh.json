@@ -16,22 +16,22 @@
     "0.2.1-rc.3": {
       "version": "0.2.1-rc.3",
       "release_note": "[中文](#cn-v0.2.1-rc.3-community) | [English](#en-v0.2.1-rc.3-community)\r\n\r\n<h3 id=\"cn-v0.2.1-rc.3-community\">体验优化</h3>\r\n\r\n- 新增左侧栏、会话视图和右侧栏的「更多」菜单，方便浏览和创建插件。 @Yifffan, @imccyu\r\n- 修复切换会话后，点击「新会话」找不回未发送草稿的问题。 @imccyu\r\n\r\n### 其他变更\r\n\r\n- DeepSeek API Key 适配器的模型列表更新方式与账号登录模式保持一致。 @LegGasai\r\n\r\n<h3 id=\"en-v0.2.1-rc.3-community\">Improvements</h3>\r\n\r\n- Add More menus to the left sidebar, conversation views, and right sidebar for browsing and creating plugins. by @Yifffan, @imccyu\r\n- Fix New Session losing an unsent draft after switching sessions. by @imccyu\r\n\r\n### Chores\r\n\r\n- The DeepSeek API key adapter now updates its model list the same way as account sign-in. by @LegGasai\r\n\r\nFull Changelog: [dsh-v0.2.1-rc.2...dsh-v0.2.1-rc.3](https://github.com/deepseek-ai/deepseek-harness/compare/dsh-v0.2.1-rc.2...dsh-v0.2.1-rc.3)",
-      "updated_at": "2026-10-23T19:15:18Z",
+      "updated_at": "2026-10-25T16:39:42Z",
       "packages": {
         "x86": {
           "version": "0.2.1-rc.3",
           "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.1-rc.3/DSH_v0.2.1-rc.3_amd64.fpk",
-          "sha256": "74e350a61fddd2d9ad150824cc797f5a0916ff823859a7366d49fefa33f3fa3a",
-          "size": 166297802
+          "sha256": "d96fa0231fadefd2151702c7b6bf4d556c3c68e58b3754e868bd44ff6c37f6d4",
+          "size": 166307013
         },
         "arm": {
           "version": "0.2.1-rc.3",
           "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.1-rc.3/DSH_v0.2.1-rc.3_arm64.fpk",
-          "sha256": "ee9b0e4f5474d528dcbfe2c466886e6825513eb1e71c06b987063f230e340f1c",
-          "size": 169248027
+          "sha256": "b7110cbeb91ac7c450e513327f8514d3e53f97daff388b6fc36e43e7ae0412f7",
+          "size": 169283435
         }
       }
     }
   },
-  "updated_at": "2026-10-25T16:33:13.671Z"
+  "updated_at": "2026-10-25T16:43:44.061Z"
 }

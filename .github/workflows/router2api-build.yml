@@ -277,16 +277,14 @@ jobs:
           fi
 
       - name: 提交索引变更
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          UP: ${{ needs.prepare.outputs.upstream }}
         run: |
           set -euo pipefail
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet; then
-            echo "索引无变化，无需提交"
-          else
-            git add -A apps build fnpack.json README.md assets
-            git commit -m "chore: Router2API ${{ needs.prepare.outputs.version }} 已由本仓库构建，索引指向本源 [skip ci]"
-            # 与本仓库其它提交/工作流并发时，先变基再推送
-            git pull --rebase --autostash || true
-            git push
-          fi
+          # 索引文件都是脚本生成的：并发冲突时以最新远端为基准重新生成再推，
+          # 不再用 pull --rebase（冲突会把 HEAD 留在 detached，push 直接 fatal）
+          bash scripts/push-index.sh \
+            --message "chore: Router2API ${{ needs.prepare.outputs.version }} 已由本仓库构建，索引指向本源 [skip ci]" \
+            --regen 'node scripts/sync-router2api.mjs; node scripts/mirror-router2api.mjs; node scripts/prune-releases.mjs --slug Router2API; node scripts/update-index.mjs --repo "${REPO}"; mkdir -p build/Router2API; if [ -n "${UP:-}" ]; then printf "%s\n" "${UP}" > build/Router2API/packed-upstream.txt; fi'
