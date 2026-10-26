@@ -197,6 +197,11 @@ detail.maintainer = MAINTAINER;
 detail.maintainer_url = MAINTAINER_URL;
 
 let synced = 0;
+// 本次真正从 Release 列表同步到的版本。索引里可能残留旧条目（例如刚把
+// 0.2.1-rc.3.3 换回官方版本号 0.2.1-rc.3，而 rc.3.3 的 Release 已被清理），
+// 只按版本号排序会把残留的"更高版本"留下、把真在的版本当历史条目丢掉，
+// 于是索引变空。故只在本集合内挑最新。
+const syncedVersions = new Set();
 for (const rel of releases) {
   const packages = packagesFromAssets(rel);
   if (packages.size === 0) continue;
@@ -224,13 +229,15 @@ for (const rel of releases) {
     packages: Object.fromEntries(packages),
   };
   synced += 1;
+  syncedVersions.add(version);
 }
 
 if (synced === 0) throw new Error(`上游 ${UPSTREAM_REPOS.join(' + ')} 没有可用的 fpk Release`);
 
-const latest = Object.keys(detail.releases).sort(versionCompare).pop();
-// 键序统一为"旧→新"（与原 deepseek-harness.json 一致，最后一个为最新版）
-const ordered = Object.keys(detail.releases).sort(versionCompare);
+// 键序统一为"旧→新"（与原 deepseek-harness.json 一致，最后一个为最新版）；
+// 只在本次同步到的版本里排序，残留的旧条目会被下面的保留逻辑丢弃。
+const ordered = Object.keys(detail.releases).filter((v) => syncedVersions.has(v)).sort(versionCompare);
+const latest = ordered[ordered.length - 1];
 // 索引里只保留最新 KEEP_VERSIONS 个版本（默认 1）：
 // 历史版本的包不在本源镜像里（指向上游单架构 _all.fpk，x86 机器装了会出错），
 // 对应的 Release 也已由 prune-releases.mjs 清理，留在列表里只会让应用中心变乱。

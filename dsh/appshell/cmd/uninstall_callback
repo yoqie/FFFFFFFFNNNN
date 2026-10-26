@@ -5,16 +5,17 @@
 # 飞牛卸载应用时默认保留应用数据（framework.md），只有应用自己显式清理才会删除，
 # 所以这里必须自己做，否则勾了"删除数据"也不会有任何效果。
 #
-# 向导字段 data_action 由 fnOS 以环境变量 wizard_data_action 注入（生态通用约定）：
+# 向导字段 wizard_data_action 由 fnOS 以同名环境变量注入（生态通用约定：
+# 字段名即变量名，参考 1panel 的 wizard_delete_data）：
 #   keep（默认）—— 保留全部数据
 #   sessions    —— 只删除会话与凭据（.dsh），保留工作区文档
-#   delete      —— 删除全部应用数据（.dsh 与 Documents 工作区）
+#   delete      —— 删除全部应用数据（整个共享数据目录：.dsh、Documents 等）
 # 同时兼容其他应用常用的 checkbox 约定：wizard_delete_data=true 等价于 delete。
 
 set -u
 
 APPNAME="${TRIM_APPNAME:-dsh}"
-DATA_ACTION="${wizard_data_action:-keep}"
+DATA_ACTION="${wizard_data_action:-${data_action:-keep}}"
 DELETE_FLAG="${wizard_delete_data:-false}"
 VAR_DIR="${TRIM_PKGVAR:-}"
 SHARE_DIR="${TRIM_DATA_SHARE_PATHS:-}"
@@ -38,12 +39,13 @@ case "${DATA_ACTION}" in
         ;;
 esac
 
-# 只删除应用自己管理的数据，并且路径必须落在飞牛的应用目录内（防误删）
+# 只删除应用自己管理的数据，并且路径必须落在飞牛的应用目录内（防误删）。
+# 允许目标就是应用数据根目录本身（delete 模式整目录删除），但不允许更上层目录。
 delete_dir() {
     local p="$1"
     [ -n "${p}" ] || return 0
     case "${p}" in
-        /vol*/@appshare/"${APPNAME}"/*|/vol*/@appdata/"${APPNAME}"/*) ;;
+        /vol*/@appshare/"${APPNAME}"|/vol*/@appshare/"${APPNAME}"/*|/vol*/@appdata/"${APPNAME}"|/vol*/@appdata/"${APPNAME}"/*) ;;
         *)
             log "拒绝清理非法路径：${p}"
             return 0
@@ -70,9 +72,13 @@ for base in /vol*/@appshare/"${APPNAME}" /vol*/@appdata/"${APPNAME}"; do
 done
 
 for base in ${ROOTS}; do
-    delete_dir "${base%/}/.dsh"
+    base="${base%/}"
     if [ "${DATA_ACTION}" = "delete" ]; then
-        delete_dir "${base%/}/Documents"
+        # 彻底删除：整个应用数据目录（.dsh、Documents、config-export 等一并清掉）
+        delete_dir "${base}"
+    else
+        # 仅删除会话与凭据，保留工作区文档
+        delete_dir "${base}/.dsh"
     fi
 done
 

@@ -2,9 +2,9 @@
 
 # 卸载前脚本：停止服务，并记录卸载向导传入的取值（便于事后排查，日志留在 $TRIM_PKGVAR）。
 #
-# fnOS 会把卸载向导里各字段的取值以环境变量 wizard_<field> 注入生命周期脚本，
-# 例如本包 wizard/uninstall 里的 data_action → $wizard_data_action。
-
+# fnOS 把卸载向导里各字段的取值以环境变量注入生命周期脚本，变量名就是字段名
+# 本身（生态通用约定：字段 wizard_delete_data → $wizard_delete_data，
+# 参考 1panel 的 wizard/uninstall）。故本包字段名为 wizard_data_action。
 LOG_DIR="${TRIM_PKGVAR:-/tmp}"
 {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - uninstall_init: data_action=${wizard_data_action:-<未设置>} delete_data=${wizard_delete_data:-<未设置>}"
