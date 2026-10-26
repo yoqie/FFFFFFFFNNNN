@@ -223,18 +223,43 @@ echo "    静态 import 校验通过"
 cp "${REPO_ROOT}/runner/runner.js" "${APP_CONTENT}/bin/runner.js"
 chmod +x "${APP_CONTENT}/bin/runner.js"
 
-# 内置更新插件 dsh-updater：随包进入应用 node_modules。
-# dsh 的 bundle 解析顺序是「应用安装目录优先，其次 profile 目录」，
-# 因此放在这里即可被 profile 声明引用，无需运行期 pnpm 安装。
-# 注意：必须放在 npm install 之后，否则会被后续安装流程覆盖。
-echo "==> 内置更新插件 dsh-updater"
-UPDATER_DEST="${APP_CONTENT}/node_modules/dsh-updater"
-rm -rf "${UPDATER_DEST}"
-mkdir -p "${UPDATER_DEST}"
-cp -r "${REPO_ROOT}/plugin/lib" "${UPDATER_DEST}/"
-cp -r "${REPO_ROOT}/plugin/client" "${UPDATER_DEST}/"
-cp "${REPO_ROOT}/plugin/package.json" "${REPO_ROOT}/plugin/cordis.patch.yml" "${UPDATER_DEST}/"
-[ -f "${UPDATER_DEST}/lib/index.js" ] || { echo "FATAL: 更新插件缺少 lib/index.js" >&2; exit 1; }
+# xdg-open 垫片：dsh 的「设置 → 通用设置 → 打开配置文件」会调用 xdg-open
+# 在原生编辑器里打开配置文档。NAS 上没有桌面环境，系统 xdg-open 必然失败，
+# 界面就报「无法打开配置文件」。这里随包提供一个同名垫片，并由 cmd/main
+# 把应用 bin 目录前置到 PATH：它把目标文件复制到共享数据目录
+# （文件管理 / SMB 可见）后正常退出，按钮不再报错，用户也能直接拿到配置。
+cat > "${APP_CONTENT}/bin/xdg-open" <<'XDGOPEN'
+#!/bin/sh
+# fnOS 无桌面环境：把目标文件导出到共享目录，供用户在文件管理中查看
+target="$1"
+[ -n "$target" ] || exit 0
+case "$target" in
+    http://*|https://*|mailto:*|ftp://*) exit 0 ;;
+esac
+[ -f "$target" ] || exit 0
+dest="${DSH_EXPORT_DIR:-${DSH_DATA_DIR:-/tmp}/config-export}"
+mkdir -p "$dest" 2>/dev/null || exit 0
+cp -f "$target" "$dest/$(basename "$target")" 2>/dev/null || exit 0
+exit 0
+XDGOPEN
+chmod +x "${APP_CONTENT}/bin/xdg-open"
+
+
+# 瘦身（安装提速）：飞牛安装器解包后会逐文件 chmod/chown，文件数越多越慢。
+# 这里删掉运行时用不到的文档、类型声明、sourcemap 与测试目录。
+# 保留 @deepseek-ai/dsh 自身（其 lib 内可能引用自带文档），只精简其余包。
+echo "==> 精简 node_modules（文档 / 类型声明 / sourcemap / 测试）"
+BEFORE_FILES=$(find "${APP_CONTENT}" -type f | wc -l)
+BEFORE_MB=$(du -sm "${APP_CONTENT}" | cut -f1)
+find "${APP_CONTENT}/node_modules" -type d -not -path "*/@deepseek-ai/dsh/*" \
+    \( -name test -o -name tests -o -name __tests__ -o -name .github -o -name docs -o -name example -o -name examples \) \
+    -prune -exec rm -rf {} + 2>/dev/null || true
+find "${APP_CONTENT}/node_modules" -type f -not -path "*/@deepseek-ai/dsh/*" \
+    \( -name "*.md" -o -name "*.markdown" -o -name "*.map" -o -name "*.d.ts" -o -name "*.d.mts" -o -name "*.d.cts" -o -name "*.tsbuildinfo" \) \
+    -delete 2>/dev/null || true
+AFTER_FILES=$(find "${APP_CONTENT}" -type f | wc -l)
+AFTER_MB=$(du -sm "${APP_CONTENT}" | cut -f1)
+echo "    文件数 ${BEFORE_FILES} → ${AFTER_FILES}；体积 ${BEFORE_MB}MB → ${AFTER_MB}MB"
 
 # 符号链接清理（关键）：
 # 飞牛安装器的 ApplyPermission 会递归遍历包内文件，遇到无法解析的软链
@@ -248,6 +273,7 @@ cp "${REPO_ROOT}/plugin/package.json" "${REPO_ROOT}/plugin/cordis.patch.yml" "${
 # 而 runner 会把 .bin 前置进子进程 PATH 来提供 pnpm，于是插件安装全线报
 # "Cannot find module '../dist/pnpm.cjs'"。这里改为生成一层 node 转发脚本：
 # 目标文件留在原位，由它自己解析内部依赖，既不复制、也不留软链。
+
 echo "==> 处理 node_modules/.bin（生成转发脚本，不复制、不留软链）"
 if [ -d "${APP_CONTENT}/node_modules/.bin" ]; then
     BIN_DIR="${APP_CONTENT}/node_modules/.bin"
