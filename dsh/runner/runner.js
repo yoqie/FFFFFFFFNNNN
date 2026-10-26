@@ -116,10 +116,12 @@ function ensureBrowserSessionSecret() {
 let launchCookie = null;
 let launchRequested = false;
 let launchSettled = false;
+let lastLaunchToken = null;
 
 function exchangeLaunchToken(token) {
     if (launchRequested) return;
     launchRequested = true;
+    lastLaunchToken = token;
     const req = http.request({
         hostname: '127.0.0.1',
         port: DSH_PORT,
@@ -163,8 +165,17 @@ function waitLaunchCookie(timeoutMs = 8000) {
     });
 }
 
-// 自签认证 cookie（缓存 12 小时，避免每个请求都算签名）
-let cachedAuthCookie = null;
+/** 用最近一次拿到的启动令牌重新兑换（用于上游突然 401 时自愈）。 */
+function reexchangeLaunchCookie() {
+    if (!lastLaunchToken) return Promise.resolve(false);
+    launchCookie = null;
+    launchRequested = false;
+    launchSettled = false;
+    exchangeLaunchToken(lastLaunchToken);
+    return waitLaunchCookie(5000).then((cookie) => Boolean(cookie));
+}
+
+// 自签认证 cookie（缓存 12 小时，避免每个请求都算签名）let cachedAuthCookie = null;
 let lastCookieGenTime = 0;
 function getAuthCookie() {
     if (launchCookie) return launchCookie;
@@ -182,15 +193,23 @@ function getAuthCookie() {
     return cachedAuthCookie;
 }
 
-// 构造转发头：注入自签 cookie，并丢弃浏览器原始来源头
+// 构造转发头：注入会话 cookie，并丢弃浏览器原始来源头
 function buildUpstreamHeaders(req) {
     const authCookie = getAuthCookie();
-    const incoming = req.headers['cookie'] || '';
+    // 浏览器自己带的 dsh-auth-* 一律丢弃：dsh 取 cookie 时只认第一个同名项，
+    // 一旦浏览器残留了旧会话（密钥/authority 已变），我们的 cookie 就会被忽略，
+    // 表现就是页面一直 401。这里保证发上去的 dsh-auth-* 只有我们注入的那一个。
+    const incoming = (req.headers['cookie'] || '')
+        .split(';')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0 && !s.startsWith('dsh-auth-'))
+        .join('; ');
     const headers = {
         ...req.headers,
         host: `127.0.0.1:${DSH_PORT}`,
-        cookie: authCookie ? (incoming ? `${incoming}; ${authCookie}` : authCookie) : incoming,
+        cookie: [incoming, authCookie].filter(Boolean).join('; '),
     };
+    if (!headers.cookie) delete headers.cookie;
     // dsh 会校验 Origin/Referer 必须与自身 authority 一致，不匹配即拒绝。
     // 屏蔽浏览器原始来源（代理端口/NAS 地址），浏览器信任由飞牛桌面入口承载。
     delete headers.origin;
@@ -202,7 +221,7 @@ function buildUpstreamHeaders(req) {
 
 // ---------- 反向代理 ----------
 
-function proxyRequest(req, res) {
+function proxyRequest(req, res, attempt = 0) {
     const upstream = http.request({
         hostname: '127.0.0.1',
         port: DSH_PORT,
@@ -210,6 +229,21 @@ function proxyRequest(req, res) {
         method: req.method,
         headers: buildUpstreamHeaders(req),
     }, (upRes) => {
+        // 上游突然 401（密钥轮换、子进程重启后 cookie 失效）：重新兑换一次再重试。
+        // 只对无请求体的方法重试，避免重放 POST。
+        if (upRes.statusCode === 401 && attempt === 0 && (req.method === 'GET' || req.method === 'HEAD')) {
+            upRes.resume();
+            console.warn('[Runner] 上游返回 401，重新兑换会话 cookie 后重试');
+            reexchangeLaunchCookie().then((ok) => {
+                if (!ok) {
+                    res.writeHead(401, { 'Content-Type': 'text/plain; charset=utf-8' });
+                    res.end('DSH 认证失败，请重启应用后重试\n');
+                    return;
+                }
+                proxyRequest(req, res, 1);
+            });
+            return;
+        }
         const outHeaders = { ...upRes.headers };
         // 认证由本代理负责，dsh 下发的 cookie 无需透传给浏览器
         delete outHeaders['set-cookie'];
