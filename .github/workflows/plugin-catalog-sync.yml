@@ -1,0 +1,61 @@
+name: plugin-catalog-sync
+
+# DSH 插件市场索引镜像
+#
+# 背景：DSH 的插件市场（插件 → 发现）默认索引源是
+#   https://cdn.jsdelivr.net/npm/dsh-plugin-catalog/index.json
+# 国内网络对该域名（jsDelivr）的 TLS 握手常被切断，表现为
+#   fetch failed: Client network socket disconnected before secure TLS connection was established
+# 这里把 npm 上 dsh-plugin-catalog 包里的 index.json 镜像到本仓库的
+# plugin-catalog 数据分支，DSH 里直接填这个索引源即可：
+#   https://raw.githubusercontent.com/yoqie/FFFFFFFFNNNN/plugin-catalog/index.json
+#
+# 数据分支每次只保留一个提交（force-push 覆盖），仓库历史不会随每日同步膨胀。
+on:
+  schedule:
+    # 每天 04:25 UTC（北京时间 12:25）同步一次上游目录
+    - cron: "25 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: plugin-catalog-sync
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Mirror catalog from npm
+        id: mirror
+        run: node scripts/mirror-plugin-catalog.mjs out/index.json
+
+      - name: Publish to plugin-catalog branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.mirror.outputs.version }}
+          SHA: ${{ steps.mirror.outputs.sha }}
+        run: |
+          set -euo pipefail
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          CURRENT=$(curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/plugin-catalog/index.json" 2>/dev/null | sha256sum | awk '{print $1}' || true)
+          if [ "${CURRENT:-}" = "${SHA}" ]; then
+            echo "catalog unchanged (sha=${SHA}), nothing to publish"
+            exit 0
+          fi
+          cd out
+          git init -q -b plugin-catalog
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.json
+          git commit -q -m "chore(plugin-catalog): mirror dsh-plugin-catalog ${VERSION}"
+          git push -q --force "$REMOTE" plugin-catalog
+          echo "published plugin-catalog branch (version=${VERSION} sha=${SHA})"
