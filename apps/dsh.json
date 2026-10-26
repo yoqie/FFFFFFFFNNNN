@@ -13,25 +13,25 @@
   "is_docker": false,
   "service_port": "3080",
   "releases": {
-    "0.2.1-rc.31": {
-      "version": "0.2.1-rc.31",
-      "release_note": "DSH v0.2.1-rc.31 飞牛 fnOS 自动构建（arm/x86）。",
-      "updated_at": "2026-10-26T02:48:25Z",
+    "0.2.1-rc.3.1": {
+      "version": "0.2.1-rc.3.1",
+      "release_note": "DSH v0.2.1-rc.3.1 飞牛 fnOS 自动构建（arm/x86）。",
+      "updated_at": "2026-10-26T02:55:41Z",
       "packages": {
         "x86": {
-          "version": "0.2.1-rc.31",
-          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.1-rc.31/DSH_v0.2.1-rc.31_amd64.fpk",
-          "sha256": "3fd4c1cf68a8beffbb069c48a01ac6a0d55558ad9b2f39c0f28c62124aed7fb8",
-          "size": 131131303
+          "version": "0.2.1-rc.3.1",
+          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.1-rc.3.1/DSH_v0.2.1-rc.3.1_amd64.fpk",
+          "sha256": "26d999fb5b70a44babd20e06c01b6dfa1addf331759fd345d8bb9916860c1f83",
+          "size": 131140704
         },
         "arm": {
-          "version": "0.2.1-rc.31",
-          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.1-rc.31/DSH_v0.2.1-rc.31_arm64.fpk",
-          "sha256": "b4f718cbb5c2a653a40e82ba0aaf28f9002aadc77690b55ae07384f7782c4468",
-          "size": 134109645
+          "version": "0.2.1-rc.3.1",
+          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.1-rc.3.1/DSH_v0.2.1-rc.3.1_arm64.fpk",
+          "sha256": "f8e332d8de629e79757f434ee4fbcf44e9b8285e994ec9a2d72da1b1e4a2e7ed",
+          "size": 134115726
         }
       }
     }
   },
-  "updated_at": "2026-10-26T02:48:37.066Z"
+  "updated_at": "2026-10-26T02:55:53.160Z"
 }
