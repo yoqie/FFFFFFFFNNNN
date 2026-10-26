@@ -21,17 +21,17 @@
         "x86": {
           "version": "0.2.1-rc.3",
           "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.1-rc.3/DSH_v0.2.1-rc.3_amd64.fpk",
-          "sha256": "0ad0bd415f333a98132e67cd459a9449e6e02a3a1284ed02a7eecdbfa8043600",
-          "size": 131133349
+          "sha256": "c3fb89b17d17c6a724c7fca1dae23606839a8cd591e43a8651817c6aef7c2f9d",
+          "size": 131127243
         },
         "arm": {
           "version": "0.2.1-rc.3",
           "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.1-rc.3/DSH_v0.2.1-rc.3_arm64.fpk",
-          "sha256": "3ddfa133a1eaaeaa2634e4d81f0051c1ce39fe374bac343918732790b065a394",
-          "size": 134091943
+          "sha256": "4c10d3d0a7e3f29ebf722cd2a751f58506a3492647d64ed94e9d457dad0276b7",
+          "size": 134112084
         }
       }
     }
   },
-  "updated_at": "2026-10-26T01:22:47.155Z"
+  "updated_at": "2026-10-26T01:29:29.325Z"
 }
