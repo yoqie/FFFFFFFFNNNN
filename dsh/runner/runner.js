@@ -107,10 +107,67 @@ function ensureBrowserSessionSecret() {
     }
 }
 
+// dsh 自己签发的会话 cookie（用启动令牌兑换而来）。
+// 自签 cookie 依赖 dsh 的内部实现（payload 版本、authority 归一化、密钥来源），
+// 上游一改动就会全部 401，浏览器上看到的就是
+// "dsh web authentication required; reopen the URL printed by dsh web."
+// 所以优先走官方通道：读 dsh 启动时打印的 ?token=，兑换一次，直接拿它下发的
+// cookie —— 与上游实现天然一致，只在拿不到令牌时才回退到自签。
+let launchCookie = null;
+let launchRequested = false;
+let launchSettled = false;
+
+function exchangeLaunchToken(token) {
+    if (launchRequested) return;
+    launchRequested = true;
+    const req = http.request({
+        hostname: '127.0.0.1',
+        port: DSH_PORT,
+        path: `/?token=${encodeURIComponent(token)}`,
+        method: 'GET',
+        headers: { host: `127.0.0.1:${DSH_PORT}` },
+    }, (res) => {
+        const setCookie = res.headers['set-cookie'];
+        res.resume();
+        if (!setCookie || setCookie.length === 0) {
+            launchSettled = true;
+            console.warn('[Runner] 启动令牌兑换未拿到 cookie，回退为自签 cookie');
+            return;
+        }
+        launchCookie = setCookie.map((c) => c.split(';')[0]).join('; ');
+        launchSettled = true;
+        console.log('[Runner] 已用启动令牌换取会话 cookie');
+    });
+    req.on('error', (e) => {
+        launchSettled = true;
+        console.warn('[Runner] 启动令牌兑换失败:', e.message);
+    });
+    req.end();
+}
+
+function scanLaunchToken(text) {
+    const m = text.match(/[?&]token=([A-Za-z0-9_-]+)/);
+    if (m) exchangeLaunchToken(m[1]);
+}
+
+/** 等令牌兑换结果；拿到 cookie 或兑换已结束即返回，避免无谓拖慢启动。 */
+function waitLaunchCookie(timeoutMs = 8000) {
+    return new Promise((resolve) => {
+        const deadline = Date.now() + timeoutMs;
+        const tick = () => {
+            if (launchCookie || launchSettled) return resolve(launchCookie);
+            if (Date.now() >= deadline) return resolve(null);
+            setTimeout(tick, 150);
+        };
+        tick();
+    });
+}
+
 // 自签认证 cookie（缓存 12 小时，避免每个请求都算签名）
 let cachedAuthCookie = null;
 let lastCookieGenTime = 0;
 function getAuthCookie() {
+    if (launchCookie) return launchCookie;
     const now = Date.now();
     if (cachedAuthCookie && now - lastCookieGenTime < 12 * 3600 * 1000) return cachedAuthCookie;
     const secret = ensureBrowserSessionSecret();
@@ -249,6 +306,10 @@ function shutdown(signal) {
  * 更新期间子进程会被主动结束，此时不应连带退出运行器（由 onExit 处理）。
  */
 function startDsh() {
+    // 每次拉起都是新进程、新启动令牌，旧会话 cookie 作废，重置后重新兑换
+    launchCookie = null;
+    launchRequested = false;
+    launchSettled = false;
     // dsh 启动时读取 credentials.yaml，故必须在启动前预置密钥。
     // 工作目录用 HOME（数据目录），与 cmd/main 保持一致。
     ensureBrowserSessionSecret();
@@ -260,8 +321,18 @@ function startDsh() {
     const child = spawn(NODE_BIN, [DSH_BIN, 'web', '--port', String(DSH_PORT), '--no-open'], {
         env: { ...process.env, PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ''}` },
         cwd: process.env.HOME || VAR_DIR,
-        stdio: ['ignore', 'inherit', 'inherit'],
+        stdio: ['ignore', 'pipe', 'pipe'],
     });
+    // 转发子进程输出到自身 stdout（日志照旧），同时扫描启动令牌
+    const tee = (stream, out) => {
+        if (!stream) return;
+        stream.on('data', (chunk) => {
+            out.write(chunk);
+            scanLaunchToken(chunk.toString());
+        });
+    };
+    tee(child.stdout, process.stdout);
+    tee(child.stderr, process.stderr);
     child.on('exit', (code) => {
         // 更新流程会主动结束子进程，此后由更新逻辑重新拉起
         if (updating) {
@@ -448,6 +519,7 @@ async function applyUpdate(stagedDir) {
         // 3) 重新拉起并健康检查
         console.log('[Runner] 更新：重新启动 dsh web');
         dshChild = startDsh();
+        await waitLaunchCookie();
         const ready = await waitDshReady();
 
         if (ready) {
@@ -544,6 +616,8 @@ async function main() {
     process.on('SIGINT', () => shutdown('SIGINT'));
 
     dshChild = startDsh();
+    // 等 dsh 打印启动令牌并兑换出会话 cookie，避免代理先开门后 401
+    await waitLaunchCookie();
     try {
         server = await startProxy();
     } catch (e) {
