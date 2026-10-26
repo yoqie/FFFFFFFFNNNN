@@ -2,7 +2,7 @@
   "slug": "dsh",
   "displayName": "DSH",
   "desc": "DeepSeek Harness（DSH）飞牛NAS版：自动跟进上游最新版本构建，amd64/arm64 双架构原生安装包，飞牛桌面一键打开。",
-  "version": "0.2.1-rc.3",
+  "version": "0.2.1-rc.31",
   "categories": [
     "AI赋能",
     "编程开发"
