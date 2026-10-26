@@ -12,26 +12,6 @@
   "install_type": "root",
   "is_docker": false,
   "service_port": "3080",
-  "releases": {
-    "0.2.1-rc.3.3": {
-      "version": "0.2.1-rc.3.3",
-      "release_note": "DSH v0.2.1-rc.3.3 飞牛 fnOS 自动构建（arm/x86）。",
-      "updated_at": "2026-10-26T01:05:00Z",
-      "packages": {
-        "x86": {
-          "version": "0.2.1-rc.3.3",
-          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.1-rc.3.3/DSH_v0.2.1-rc.3.3_amd64.fpk",
-          "sha256": "76f4174d564c2611eb635b2a86fbb88dad88182873b1dff8a0e17cd0229c4504",
-          "size": 131132165
-        },
-        "arm": {
-          "version": "0.2.1-rc.3.3",
-          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.1-rc.3.3/DSH_v0.2.1-rc.3.3_arm64.fpk",
-          "sha256": "2ad60204553c0672996241212bc73d0ec33df5737b6a9999825125f050ef4629",
-          "size": 134097482
-        }
-      }
-    }
-  },
+  "releases": {},
   "updated_at": "2026-10-26T01:05:12.222Z"
 }
