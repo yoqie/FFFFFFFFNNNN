@@ -12,6 +12,3 @@ build/deepseek-harness/app.tgz
 build/deepseek-harness/ui/
 dist/
 *.tgz
-
-# 插件市场索引镜像的构建产物（由 workflow 提交到 plugin-catalog 数据分支）
-out/
