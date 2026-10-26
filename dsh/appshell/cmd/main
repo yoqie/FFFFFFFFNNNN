@@ -3,7 +3,7 @@
 # DSH - 飞牛 fnOS 生命周期控制脚本
 #
 # 接入方式：端口模式。runner.js 监听 0.0.0.0:${SERVICE_PORT}，
-# 飞牛桌面入口（ui/config，type=iframe，port=3082）直接访问该端口。
+# 飞牛桌面入口（ui/config，type=iframe，port=3080）直接访问该端口。
 #
 # 运行依赖：应用中心 nodejs_v24 依赖包提供的 Node 运行时（manifest 已声明）
 
@@ -19,7 +19,7 @@ fi
 
 # 对外服务端口：由系统按 manifest 的 service_port 注入，
 # 同时与 ui/config 中桌面入口的 port 保持一致（两处必须相同）
-SERVICE_PORT="${TRIM_SERVICE_PORT:-3082}"
+SERVICE_PORT="${TRIM_SERVICE_PORT:-3080}"
 # 内部端口：dsh web 只监听回环，由 runner 代理
 INTERNAL_PORT=$((SERVICE_PORT + 1))
 PORT_PATTERN=":(${SERVICE_PORT}|${INTERNAL_PORT}) "

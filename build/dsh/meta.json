@@ -9,7 +9,7 @@
   ],
   "maintainer": "deepseek-ai",
   "maintainer_url": "https://github.com/deepseek-ai/deepseek-harness",
-  "service_port": "3082",
+  "service_port": "3080",
   "run_as": "root",
   "install_type": "root",
   "is_docker": false

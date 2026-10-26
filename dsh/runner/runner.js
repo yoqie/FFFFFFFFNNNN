@@ -4,7 +4,7 @@
  * 职责（只做三件事）：
  *   1. 启动 dsh web，仅监听 127.0.0.1:DSH_PORT（外部无法直连内部服务）
  *   2. 在 0.0.0.0:PORT 监听，反向代理到内部 dsh web ——
- *      这是飞牛桌面入口（type=iframe，port=3082）实际访问的端口
+ *      这是飞牛桌面入口（type=iframe，port=3080）实际访问的端口
  *   3. 代理时补两件事：
  *      a) 自签 dsh 认证 cookie（dsh 的浏览器认证机制，见下）
  *      b) 注入 crypto.randomUUID polyfill（局域网 HTTP 非安全上下文需要）
@@ -29,9 +29,9 @@ const APP_DIR = process.env.TRIM_APPDEST || path.resolve(__dirname, '..');
 const VAR_DIR = process.env.TRIM_PKGVAR || path.join(APP_DIR, 'data');
 
 // 内部端口：dsh web 只监听回环，外部一律经本代理访问
-const DSH_PORT = parseInt(process.env.DSH_PORT || '3083', 10);
+const DSH_PORT = parseInt(process.env.DSH_PORT || '3081', 10);
 // 对外端口：飞牛桌面入口按 manifest 的 service_port 访问
-const SERVICE_PORT = parseInt(process.env.PORT || '3082', 10);
+const SERVICE_PORT = parseInt(process.env.PORT || '3080', 10);
 
 const NODE_BIN = process.env.DSH_NODE_BIN || 'node';
 const DSH_BIN = path.join(APP_DIR, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js');
@@ -54,7 +54,7 @@ const POLYFILL = 'if(typeof crypto!=="undefined"&&!crypto.randomUUID){crypto.ran
 
 // 本地应用标记：dsh 前端通过地址栏 hostname 判断是否回环访问
 //   isLoopback = transport?.ownsHost === true || isLoopbackHostname(location.hostname)
-// 非回环（如 http://NAS_IP:3082）时，设置镜像会降级为 memory 模式且不发起请求，
+// 非回环（如 http://NAS_IP:3080）时，设置镜像会降级为 memory 模式且不发起请求，
 // 界面报「settings are unavailable in this browser」，表现为无法加载/添加模型。
 // 桌面客户端由宿主注入 { ownHost: true } 规避该限制；本应用以端口方式提供
 // 桌面入口（同一台 NAS、已通过飞牛登录），故在此补同样的标记。

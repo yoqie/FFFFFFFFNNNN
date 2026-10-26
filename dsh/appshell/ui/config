@@ -5,7 +5,7 @@
       "icon": "images/icon_{0}.png",
       "type": "iframe",
       "protocol": "http",
-      "port": "3082",
+      "port": "3080",
       "url": "/",
       "allUsers": true
     }
