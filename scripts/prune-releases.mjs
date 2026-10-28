@@ -13,7 +13,13 @@
  *   node scripts/prune-releases.mjs --slug 1panel --keep-tag 1panel-2.3.2-2
  *   node scripts/prune-releases.mjs --slug Router2API
  *   node scripts/prune-releases.mjs --slug 1panel --keep 2      # 想多留一个旧版就 --keep 2
+ *   node scripts/prune-releases.mjs --slug dsh --keep-tag dsh-0.2.2-alpha.2 --prune-assets
  *   node scripts/prune-releases.mjs --slug 1panel --dry-run      # 只打印计划
+ *
+ * --prune-assets：额外清掉「保留 Release 里已不被 apps/<slug>.json 引用」的旧资产
+ *   （产物名带内容指纹后，重建一次就会多一份）。--asset-min-age-minutes 默认 60，
+ *   这段时间内的旧资产会留着，给还在用旧索引的客户端缓冲。
+ *   索引里没有任何下载条目时跳过，绝不误删。
  *
  * 环境变量：GH_TOKEN / GITHUB_TOKEN（需 contents:write）、REPO（默认 yoqie/FFFFFFFFNNNN）
  *
@@ -34,6 +40,12 @@ const KEEP = Math.max(1, Number(opt('--keep', '1')) || 1);
 const KEEP_TAG = opt('--keep-tag', '');
 const REPO = opt('--repo', process.env.REPO || 'yoqie/FFFFFFFFNNNN');
 const DRY = has('--dry-run');
+// 产物名带内容指纹后，重建一次就多一个资产；索引只指向当前那份。
+// 打开这个开关就把「保留 Release 里已不被索引引用」的旧资产删掉，
+// 只保留 ASSET_MIN_AGE 分钟内的（给还在用旧索引的客户端留缓冲）。
+const PRUNE_ASSETS = has('--prune-assets');
+const ASSET_MIN_AGE_RAW = Number(opt('--asset-min-age-minutes', '60'));
+const ASSET_MIN_AGE = Number.isFinite(ASSET_MIN_AGE_RAW) ? Math.max(0, ASSET_MIN_AGE_RAW) : 60;
 const TOKEN = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || '';
 
 if (!SLUG) {
@@ -169,6 +181,42 @@ if (raw) {
     console.log(`apps/${SLUG}.json: 清理 ${removedPkgs} 个下载条目、${removedEntries} 个空版本条目${DRY ? '（dry-run 未写入）' : ''}`);
   } else {
     console.log(`apps/${SLUG}.json: 无需清理（${Object.keys(detail.releases || {}).length} 个版本条目全部有效）`);
+  }
+}
+
+// ---- 清理保留 Release 里「已不被索引引用」的旧资产 ----
+// 只在 --prune-assets 时执行：索引里的 size/sha256 是安装校验的依据，
+// 删掉仍被引用的资产等于发布一个 404，所以只删索引没提到的那些。
+if (PRUNE_ASSETS) {
+  const detailRaw = await fs.readFile(indexPath, 'utf8').catch(() => null);
+  const referenced = new Set();
+  if (detailRaw) {
+    for (const rel of Object.values(JSON.parse(detailRaw).releases || {})) {
+      for (const pkg of Object.values(rel.packages || {})) {
+        const m = /^https:\/\/github\.com\/[^/]+\/[^/]+\/releases\/download\/([^/]+)\/(.+)$/.exec(pkg.download_url || '');
+        if (m) referenced.add(`${decodeURIComponent(m[1])}/${decodeURIComponent(m[2])}`);
+      }
+    }
+  }
+  if (referenced.size === 0) {
+    console.warn('索引里没有任何下载条目，跳过资产清理（避免误删）');
+  } else {
+    const cutoff = Date.now() - ASSET_MIN_AGE * 60000;
+    for (const rel of aliveSource) {
+      if (!keep.has(rel.tag_name)) continue;
+      for (const a of rel.assets || []) {
+        if (a.state && a.state !== 'uploaded') continue;
+        if (referenced.has(`${rel.tag_name}/${a.name}`)) continue;
+        const ts = Date.parse(a.created_at || a.updated_at || '') || 0;
+        if (ts > cutoff) {
+          console.log(`保留资产 ${a.name}（${Math.round((Date.now() - ts) / 60000)} 分钟前上传，等旧索引自然过期）`);
+          continue;
+        }
+        if (DRY) { console.log(`[dry-run] 将删除资产 ${a.name}`); continue; }
+        await api('DELETE', `/repos/${REPO}/releases/assets/${a.id}`);
+        console.log(`已删除资产 ${a.name}（${((a.size || 0) / 1048576).toFixed(1)}MB，已不被索引引用）`);
+      }
+    }
   }
 }
 

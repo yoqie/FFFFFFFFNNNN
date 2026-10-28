@@ -55,23 +55,34 @@ const readJson = async (p, d) => JSON.parse(await fs.readFile(p, 'utf8').catch((
 const writeJson = (p, o) => fs.writeFile(p, JSON.stringify(o, null, 2) + '\n');
 
 // ---------- 1. 收集产物 ----------
+// 产物名带内容指纹（工作流按 sha256 前 12 位重命名）。原因：Release 资产一旦被同名覆盖，
+// 索引里记的 size/sha256 就和线上文件对不上，飞牛安装时直接报「安装包大小校验失败」。
+// 名字跟内容绑定后，同一个下载地址的内容永不改变，索引与资产永远一致。
+const distEntries = await fs.readdir(DIST).catch(() => []);
 const packages = {};
 const missing = [];
 for (const { arch, platform } of ARCHS) {
-  const name = `DSH_v${VERSION}_${arch}.fpk`;
-  const file = path.join(DIST, name);
-  let stat;
-  try { stat = await fs.stat(file); } catch { missing.push(`${arch}（${name}）`); continue; }
+  const candidates = [];
+  for (const name of distEntries) {
+    if (!name.startsWith(`DSH_v${VERSION}_${arch}`) || !name.endsWith('.fpk')) continue;
+    const file = path.join(DIST, name);
+    const st = await fs.stat(file).catch(() => null);
+    if (st) candidates.push({ name, file, st });
+  }
+  // 同一架构有多个产物时取最新写入的那个（正常情况下只有一个）
+  candidates.sort((a, b) => b.st.mtimeMs - a.st.mtimeMs);
+  const pick = candidates[0];
+  if (!pick) { missing.push(`${arch}（DSH_v${VERSION}_${arch}*.fpk）`); continue; }
   packages[platform] = {
     version: VERSION,
-    download_url: `https://github.com/${REPO}/releases/download/${TAG}/${name}`,
-    sha256: await sha256(file),
-    size: stat.size,
+    download_url: `https://github.com/${REPO}/releases/download/${TAG}/${pick.name}`,
+    sha256: await sha256(pick.file),
+    size: pick.st.size,
   };
-  console.log(`  ${platform.padEnd(4)} ← ${name}（${(stat.size / 1048576).toFixed(1)}MB, sha256 ${packages[platform].sha256.slice(0, 12)}…）`);
+  console.log(`  ${platform.padEnd(4)} ← ${pick.name}（${(pick.st.size / 1048576).toFixed(1)}MB, sha256 ${packages[platform].sha256.slice(0, 12)}…）`);
 }
 if (Object.keys(packages).length === 0) {
-  console.error(`FATAL: ${DIST} 里没有 DSH_v${VERSION}_<arch>.fpk，无法登记索引`);
+  console.error(`FATAL: ${DIST} 里没有 DSH_v${VERSION}_<arch>*.fpk，无法登记索引`);
   process.exit(1);
 }
 if (missing.length > 0) {

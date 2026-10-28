@@ -148,6 +148,26 @@ jobs:
             --arch "${{ matrix.arch }}" \
             --out dist
 
+      # 产物名带内容指纹：同一版本的 Release 资产永远不会被「同名不同内容」覆盖，
+      # 索引里的 size/sha256 因此永远和线上文件一致（否则安装时报「安装包大小校验失败」）。
+      - name: 产物按内容指纹重命名
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          cd dist
+          for f in *.fpk; do
+            stem="${f%.fpk}"
+            # 已经是「名字_12位hex」就不重复加（重跑幂等）
+            if printf '%s' "${stem##*_}" | grep -Eq '^[0-9a-f]{12}$'; then
+              stem="${stem%_*}"
+            fi
+            h=$(sha256sum "${f}" | cut -c1-12)
+            new="${stem}_${h}.fpk"
+            if [ "${new}" = "${f}" ]; then continue; fi
+            mv -f "${f}" "${new}"
+            echo "→ ${new}"
+          done
+
       - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
@@ -288,4 +308,4 @@ jobs:
           # （push-index.sh 会先 git reset --hard origin/main，再执行 --regen）
           bash scripts/push-index.sh \
             --message "chore: DSH ${VER} 由本仓库从上游构建，索引指向本源 [skip ci]" \
-            --regen "node scripts/finalize-dsh.mjs --version '${VER}' --dist dist --repo '${REPO}' --changelog-file /tmp/dsh-changelog.md; node scripts/prune-releases.mjs --slug dsh --keep-tag 'dsh-${VER}'; node scripts/update-index.mjs --repo '${REPO}'; mkdir -p build/dsh; printf '%s\n' '${VER}' > build/dsh/packed-upstream.txt"
+            --regen "node scripts/finalize-dsh.mjs --version '${VER}' --dist dist --repo '${REPO}' --changelog-file /tmp/dsh-changelog.md; node scripts/prune-releases.mjs --slug dsh --keep-tag 'dsh-${VER}' --prune-assets; node scripts/update-index.mjs --repo '${REPO}'; mkdir -p build/dsh; printf '%s\n' '${VER}' > build/dsh/packed-upstream.txt"
