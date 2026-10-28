@@ -195,8 +195,11 @@ start_gate() {
     if pid=$(read_pid "${GATE_PID_FILE}"); then
         return 0
     fi
+    # dsh 只绑局域网 IP，127.0.0.1 上没人监听；让 gate 额外监听回环，
+    # 「在 NAS 本机上开浏览器」才能用 127.0.0.1:3080 进来。
     DSH_GATE_HOST="${LAN_IP}" \
     DSH_GATE_PORT="${SERVICE_PORT}" \
+    DSH_GATE_EXTRA_HOSTS="${DSH_GATE_EXTRA_HOSTS:-127.0.0.1}" \
     DSH_WEB_HOST="${LAN_IP}" \
     DSH_WEB_PORT="${DSH_PORT}" \
     DSH_TOKEN_FILE="${TOKEN_FILE}" \

@@ -31,8 +31,23 @@ const WEB_HOST = process.env.DSH_WEB_HOST || GATE_HOST;
 const WEB_PORT = Number(process.env.DSH_WEB_PORT || 3081);
 const TOKEN_FILE = process.env.DSH_TOKEN_FILE || '';
 
+// dsh 本体只绑局域网 IP，所以 127.0.0.1 上没人监听；额外监听这些地址，
+// 让「在 NAS 本机上开浏览器」也能进（用 127.0.0.1:3080，不要用 localhost）。
+const EXTRA_HOSTS = (process.env.DSH_GATE_EXTRA_HOSTS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((h) => h && h !== GATE_HOST);
+
 function log(message) {
     process.stdout.write(`[gate] ${message}\n`);
+}
+
+/** 访问日志：谁、用什么 Host 访问了哪条路径、结果如何（令牌打码）。 */
+function logAccess(req, res) {
+    const url = String(req.url || '/').replace(/token=[^&\s]+/g, 'token=***');
+    const who = (req.socket && req.socket.remoteAddress) || '-';
+    const host = req.headers.host || '-';
+    log(`${who} ${host} ${req.method} ${url} → ${res.statusCode}`);
 }
 
 /** 读当前启动令牌；cmd/main 尚未写入时返回空串。 */
@@ -59,7 +74,9 @@ function webAlive() {
     });
 }
 
-const server = http.createServer(async (req, res) => {
+const handler = async (req, res) => {
+    res.on('finish', () => logAccess(req, res));
+
     // 健康检查：给 cmd/main 与排查用，不参与跳转
     if (req.url === '/healthz') {
         const token = readToken();
@@ -89,20 +106,29 @@ const server = http.createServer(async (req, res) => {
     const target = `http://${WEB_HOST}:${WEB_PORT}/?token=${encodeURIComponent(token)}`;
     res.writeHead(302, { location: target, 'cache-control': 'no-store' });
     res.end();
-});
+};
 
-server.on('error', (error) => {
-    log(`FATAL: 端口 ${GATE_HOST}:${GATE_PORT} 监听失败: ${error.message}`);
-    process.exit(1);
-});
-
-server.listen(GATE_PORT, GATE_HOST, () => {
-    log(`入口就绪 http://${GATE_HOST}:${GATE_PORT} → http://${WEB_HOST}:${WEB_PORT}/?token=…`);
-});
+const servers = [];
+for (const host of [GATE_HOST, ...EXTRA_HOSTS]) {
+    const primary = host === GATE_HOST;
+    const server = http.createServer(handler);
+    server.on('error', (error) => {
+        if (primary) {
+            log(`FATAL: 端口 ${host}:${GATE_PORT} 监听失败: ${error.message}`);
+            process.exit(1);
+        }
+        // 附加地址（例如 127.0.0.1）监听失败不影响主入口
+        log(`WARN: 附加地址 ${host}:${GATE_PORT} 监听失败: ${error.message}`);
+    });
+    server.listen(GATE_PORT, host, () => {
+        log(`入口就绪 http://${host}:${GATE_PORT} → http://${WEB_HOST}:${WEB_PORT}/?token=…`);
+    });
+    servers.push(server);
+}
 
 for (const signal of ['SIGTERM', 'SIGINT']) {
     process.on(signal, () => {
-        server.close(() => process.exit(0));
+        for (const s of servers) s.close();
         setTimeout(() => process.exit(0), 2000).unref();
     });
 }
