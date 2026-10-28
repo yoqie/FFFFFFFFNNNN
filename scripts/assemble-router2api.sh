@@ -230,7 +230,7 @@ log "[6/6] 清理软链、统一权限并校验"
 #
 # 例外：node_modules/.bin 下的软链不能"复制实体化"——这些 bin 脚本内部用
 # 相对路径 require 自己包内的文件，被复制到 .bin/ 后相对路径失效，运行即报
-# MODULE_NOT_FOUND（DSH 包的 pnpm 就栽在这里）。改为生成一层 node 转发脚本。
+# MODULE_NOT_FOUND。改为生成一层 node 转发脚本。
 if [ -d "${APP_CONTENT}/node_modules/.bin" ]; then
     BIN_DIR="${APP_CONTENT}/node_modules/.bin"
     while IFS= read -r link; do

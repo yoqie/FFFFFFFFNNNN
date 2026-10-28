@@ -3,7 +3,7 @@
 # push-index.sh —— 推送由脚本生成的索引（apps/*.json、fnpack.json、README.md 等）
 #
 # 为什么需要它：
-#   dsh-build / dsh-sync / router2api-build / router2api-sync 会并发修改同一批
+#   follow-upstream / router2api-build / router2api-sync 会并发修改同一批
 #   生成文件。原先的写法是「提交 → git pull --rebase --autostash || true → git push」，
 #   一旦变基冲突，HEAD 就停在 detached 状态，`|| true` 把错误吞掉后 git push 直接
 #   报 “fatal: You are not currently on a branch”（exit 128），整条流水线失败，
@@ -14,7 +14,7 @@
 #   生成脚本，再提交推送」，被并发提交抢先就重试。生成脚本幂等，重跑安全。
 #
 # 用法：
-#   scripts/push-index.sh --message "chore: ..." --regen 'node scripts/sync-dsh.mjs; ...'
+#   scripts/push-index.sh --message "chore: ..." --regen 'node scripts/sync-router2api.mjs; ...'
 #
 #   环境变量：GITHUB_REF_NAME（默认 main）、REPO、以及 --regen 里用到的变量
 # =============================================================

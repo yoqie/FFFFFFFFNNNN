@@ -7,8 +7,5 @@ pending.json
 # 同步脚本的工作缓存（已提交的 build/ 是生成结果，这个是临时目录）
 .tmp/
 
-# DeepSeek Harness Node runtime 构建产物（Action 里现装现打，不进仓库）
-build/deepseek-harness/app.tgz
-build/deepseek-harness/ui/
 dist/
 *.tgz

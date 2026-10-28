@@ -7,7 +7,7 @@ name: router2api-sync
 #   下载不再依赖上游仓库；索引里的作者固定写最上游 NNNNolan
 on:
   schedule:
-    # 每小时 45 分兜底同步一次索引（与 dsh-sync 的 40 分错开）
+    # 每小时 45 分兜底同步一次索引
     - cron: "45 * * * *"
   workflow_dispatch:
     inputs:

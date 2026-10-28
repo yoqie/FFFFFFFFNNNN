@@ -139,7 +139,7 @@ async function fetchAllReleases() {
       for (let page = 1; ; page += 1) {
         const rels = await ghJson(`https://api.github.com/repos/${repo}/releases?per_page=100&page=${page}`);
         for (const r of rels) {
-          // 本仓库里还挂着 dsh / 1panel 的 Release，只认 Router2API-<版本> 这种 tag
+          // 本仓库里还挂着 1panel 的 Release，只认 Router2API-<版本> 这种 tag
           if (repo === REPO && !String(r.tag_name).startsWith(`${SLUG}-`)) continue;
           all.push({ ...r, __repo: repo });
         }

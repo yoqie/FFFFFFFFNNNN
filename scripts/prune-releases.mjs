@@ -2,7 +2,7 @@
 /**
  * prune-releases.mjs —— 某个应用发布新版本后，自动删除本仓库里该应用的旧 Release
  *
- * 背景：1Panel / DSH 每跟随上游发一次版就会新建一个 Release（tag: <slug>-<版本>），
+ * 背景：1Panel / Router2API 每跟随上游发一次版就会新建一个 Release（tag: <slug>-<版本>），
  * 每个包 60~170MB，旧版本长期堆积。本脚本在**新版发布成功之后**执行清理：
  *   1. 列出 tag 以 <slug>- 开头的 Release，按创建时间保留最新 N 个（默认 1）
  *   2. 删除其余 Release（并尽力删除对应的 git tag）
@@ -11,7 +11,7 @@
  *
  * 用法：
  *   node scripts/prune-releases.mjs --slug 1panel --keep-tag 1panel-2.3.2-2
- *   node scripts/prune-releases.mjs --slug dsh
+ *   node scripts/prune-releases.mjs --slug Router2API
  *   node scripts/prune-releases.mjs --slug 1panel --keep 2      # 想多留一个旧版就 --keep 2
  *   node scripts/prune-releases.mjs --slug 1panel --dry-run      # 只打印计划
  *

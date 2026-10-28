@@ -12,7 +12,7 @@
 //           = base.<k>             k 取最小正整数，使 base.k > highest
 //
 // 用法：
-//   node scripts/next-version.mjs --slug dsh --upstream-version 0.2.1-rc.2
+//   node scripts/next-version.mjs --slug Router2API --upstream-version 2.1.2
 // 输出（stdout）：最终版本号；细节打到 stderr，便于日志查看。
 //
 // 说明：对"同一上游版本重发"（如打包修复后强制重建），会得到 base.1 / base.2 这样的
