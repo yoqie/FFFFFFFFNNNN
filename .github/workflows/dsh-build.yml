@@ -194,12 +194,19 @@ jobs:
             --version "${VER}" \
             --tags 'dsh-v{v},v{v},{v}' 2>/dev/null || true)
           [ -n "${UPSTREAM_NOTES}" ] || UPSTREAM_NOTES="（上游未提供该版本的更新说明）"
+          # 打包层修复单独成节：它跟上游版本无关，用户升级后能直接看到
+          PACKAGING_NOTES=$(cat packaging/dsh/CHANGELOG.md 2>/dev/null || true)
+          [ -n "${PACKAGING_NOTES}" ] || PACKAGING_NOTES="（本次无打包层改动）"
           cat > /tmp/release-notes.md <<NOTES
           DeepSeek Harness v${VER} 飞牛 fnOS 版（GitHub Actions 双架构原生构建）。
 
           **按 NAS 架构下载**：
           - x86_64（AMD/Intel，绝大多数 NAS 与虚拟机）→ \`DSH_v${VER}_amd64.fpk\`
           - ARM64 → \`DSH_v${VER}_arm64.fpk\`
+
+          ## 飞牛打包修复（本仓库）
+
+          ${PACKAGING_NOTES}
 
           ## 更新内容（同步自上游）
 
@@ -261,7 +268,14 @@ jobs:
           set -euo pipefail
           UPSTREAM_NOTES=$(node scripts/upstream-note.mjs \
             --repo "${UPSTREAM_REPO}" --version "${VER}" --tags 'dsh-v{v},v{v},{v}' 2>/dev/null || true)
-          printf '%s\n' "${UPSTREAM_NOTES:-（上游未提供该版本的更新说明）}" > /tmp/dsh-changelog.md
+          # 打包层修复也写进应用中心的更新说明（与 Release 说明同一节）
+          PACKAGING_NOTES=$(cat packaging/dsh/CHANGELOG.md 2>/dev/null || true)
+          {
+            if [ -n "${PACKAGING_NOTES}" ]; then
+              printf '## 飞牛打包修复（本仓库）\n\n%s\n\n' "${PACKAGING_NOTES}"
+            fi
+            printf '## 更新内容（同步自上游）\n\n%s\n' "${UPSTREAM_NOTES:-（上游未提供该版本的更新说明）}"
+          } > /tmp/dsh-changelog.md
 
       - name: 登记索引并推送
         env:

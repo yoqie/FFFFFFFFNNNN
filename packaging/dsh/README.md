@@ -45,6 +45,7 @@
 | `scripts/assemble.sh` | 装 DSH、瘦身、软链清理、硬校验 |
 | `appshell/` | fnOS 应用壳：`manifest`、`cmd/`、`config/`、`wizard/`、`ui/`、图标 |
 | `gate/gate.js` | 入口跳转器 |
+| `CHANGELOG.md` | 打包层改动记录。`dsh-build` 发布时会整段拼进 Release 说明和飞牛应用中心的更新内容，跟上游版本无关的修复写这里 |
 
 ## 3. 上游产物从哪来
 
