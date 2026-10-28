@@ -22,6 +22,7 @@
 'use strict';
 
 const http = require('node:http');
+const net = require('node:net');
 const fs = require('node:fs');
 
 const GATE_HOST = process.env.DSH_GATE_HOST || '127.0.0.1';
@@ -44,12 +45,27 @@ function readToken() {
     }
 }
 
-const server = http.createServer((req, res) => {
+/** 探测 dsh 本体是否还在监听：崩掉时不要 302 到没人监听的端口。 */
+function webAlive() {
+    return new Promise((resolve) => {
+        const socket = net.connect({ host: WEB_HOST, port: WEB_PORT });
+        const settle = (ok) => {
+            socket.destroy();
+            resolve(ok);
+        };
+        socket.setTimeout(1500, () => settle(false));
+        socket.once('connect', () => settle(true));
+        socket.once('error', () => settle(false));
+    });
+}
+
+const server = http.createServer(async (req, res) => {
     // 健康检查：给 cmd/main 与排查用，不参与跳转
     if (req.url === '/healthz') {
         const token = readToken();
-        res.writeHead(token ? 200 : 503, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
-        res.end(token ? 'ready\n' : 'starting\n');
+        const up = token ? await webAlive() : false;
+        res.writeHead(up ? 200 : 503, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
+        res.end(up ? 'ready\n' : 'starting\n');
         return;
     }
 
@@ -58,6 +74,14 @@ const server = http.createServer((req, res) => {
         // dsh 还在启动：明确告知，而不是给浏览器一个 401
         res.writeHead(503, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
         res.end('DSH 正在启动，请稍候刷新…\n');
+        return;
+    }
+
+    // dsh 本体已退出（例如堆内存耗尽）时，看门狗正在把它拉起来；
+    // 这时给一个明确的 503，而不是让浏览器跳到 3081 吃「无法访问此网站」。
+    if (!(await webAlive())) {
+        res.writeHead(503, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
+        res.end('DSH 正在重启，请稍候刷新…\n');
         return;
     }
 

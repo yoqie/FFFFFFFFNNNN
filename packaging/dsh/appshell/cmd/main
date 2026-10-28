@@ -47,6 +47,7 @@ mkdir -p "${DATA_DIR}" 2>/dev/null || true
 LOG_FILE="${PKGVAR}/${APPNAME}.log"
 PID_FILE="${PKGVAR}/${APPNAME}.pid"
 GATE_PID_FILE="${PKGVAR}/${APPNAME}-gate.pid"
+WATCHDOG_PID_FILE="${PKGVAR}/${APPNAME}-watchdog.pid"
 TOKEN_FILE="${PKGVAR}/launch-token"
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "${LOG_FILE}"; }
@@ -130,10 +131,17 @@ YAML
 
 # ---------- 启动 ----------
 wait_token() {
-    # dsh 打印的地址里带一次性启动令牌；取到后写进文件供 gate 使用
-    local i token
+    # dsh 打印的地址里带一次性启动令牌；取到后写进文件供 gate 使用。
+    #
+    # 日志是追加写的（跨重启保留），所以只能扫描「本次启动之后新增」的部分：
+    # 直接 grep 整个文件时，上一次运行留下的旧令牌会让第一轮循环立刻命中，
+    # 把过期令牌写进 TOKEN_FILE；浏览器经 gate 跳到 3081 后拿到 401，表现就是
+    # 「打不开网页」。先记下启动前的字节偏移，之后只 tail 新增内容。
+    local i token offset
+    offset="${LOG_OFFSET:-0}"
     for i in $(seq 1 120); do
-        token=$(grep -o 'token=[A-Za-z0-9_-]\{16,\}' "${LOG_FILE}" 2>/dev/null | tail -n 1 | cut -d= -f2)
+        token=$(tail -c "+$((offset + 1))" "${LOG_FILE}" 2>/dev/null \
+            | grep -o 'token=[A-Za-z0-9_-]\{16,\}' | tail -n 1 | cut -d= -f2)
         if [ -n "${token}" ]; then
             printf '%s' "${token}" > "${TOKEN_FILE}"
             log "已取得启动令牌（长度 ${#token}）"
@@ -145,16 +153,103 @@ wait_token() {
     return 1
 }
 
-start_process() {
+# ---------- 子进程 ----------
+# 起 dsh 本体并等到启动令牌；成功后 PID 写入 PID_FILE，返回 0。
+# 单独拆出来是因为看门狗重启时也要走完全一样的一套（含令牌刷新）。
+spawn_dsh() {
+    local dsh_pid
+    rm -f "${TOKEN_FILE}"
+    cd "${DATA_DIR}" || return 1
+
+    # 记录本次启动前的日志字节数：wait_token 只扫描之后新增的内容，避免命中
+    # 上一次运行留在日志里的旧令牌（见 wait_token 的注释）。
+    LOG_OFFSET=$(stat -c%s "${LOG_FILE}" 2>/dev/null || echo 0)
+
+    # 参数说明：
+    #   --patch        叠加 pnpmCommand 补丁层（不修改用户配置）
+    #   --host/--port  绑定 NAS 局域网 IP（dsh 拒绝通配地址）
+    #   --trusted-host 允许从该 authority 访问（Origin 校验用）
+    #   --public-url   对外地址，决定 dsh 打印与回跳的 URL
+    #   --no-open      无桌面环境，不要尝试拉起浏览器
+    "${NODE_RUNTIME}" "${DSH_BIN}" web \
+        --patch "${PATCH_FILE}" \
+        --host "${LAN_IP}" \
+        --port "${DSH_PORT}" \
+        --trusted-host "${LAN_IP}:${DSH_PORT}" \
+        --public-url "http://${LAN_IP}:${DSH_PORT}/" \
+        --no-open >> "${LOG_FILE}" 2>&1 &
+    dsh_pid=$!
+    printf '%s' "${dsh_pid}" > "${PID_FILE}"
+
+    if ! wait_token; then
+        kill -TERM "${dsh_pid}" 2>/dev/null || true
+        rm -f "${PID_FILE}"
+        return 1
+    fi
+    return 0
+}
+
+# 入口跳转器：只做 302，跳转后流量直连 dsh。已经在跑就不重复起。
+start_gate() {
     local pid
+    if pid=$(read_pid "${GATE_PID_FILE}"); then
+        return 0
+    fi
+    DSH_GATE_HOST="${LAN_IP}" \
+    DSH_GATE_PORT="${SERVICE_PORT}" \
+    DSH_WEB_HOST="${LAN_IP}" \
+    DSH_WEB_PORT="${DSH_PORT}" \
+    DSH_TOKEN_FILE="${TOKEN_FILE}" \
+        "${NODE_RUNTIME}" "${GATE_JS}" >> "${LOG_FILE}" 2>&1 &
+    printf '%s' "$!" > "${GATE_PID_FILE}"
+}
+
+# 看门狗：dsh 意外退出（典型是堆内存耗尽）时自动把它拉起来，并刷新启动令牌。
+# 没有它的话，dsh 一崩，gate 还在 3080 上把浏览器 302 到没人监听的 3081，
+# 用户看到的就是「无法访问此网站」。
+start_watchdog() {
+    local pid
+    if pid=$(read_pid "${WATCHDOG_PID_FILE}"); then
+        return 0
+    fi
+    (
+        local fails=0 delay interval
+        interval="${DSH_WATCHDOG_INTERVAL:-10}"
+        while :; do
+            sleep "${interval}"
+            if ! read_pid "${PID_FILE}" >/dev/null; then
+                log "看门狗：dsh 已退出，自动重启"
+                if spawn_dsh; then
+                    fails=0
+                    log "看门狗：dsh 已重启（PID $(cat "${PID_FILE}" 2>/dev/null)）"
+                else
+                    # 连续失败时退避，避免起不来时把日志刷爆
+                    fails=$((fails + 1))
+                    delay=$((fails * interval))
+                    [ "${delay}" -gt 300 ] && delay=300
+                    log "看门狗：重启失败（连续 ${fails} 次），${delay} 秒后重试"
+                    sleep "${delay}"
+                fi
+            fi
+        done
+    ) >> "${LOG_FILE}" 2>&1 &
+    printf '%s' "$!" > "${WATCHDOG_PID_FILE}"
+}
+
+start_process() {
+    local pid dsh_pid i
     if pid=$(read_pid "${PID_FILE}"); then
         log "${APPNAME} 已在运行（PID ${pid}）"
+        start_gate
+        start_watchdog
         return 0
     fi
     pid=$(find_dsh_pid)
     if alive "${pid}"; then
         printf '%s' "${pid}" > "${PID_FILE}"
         log "已找回运行中的 dsh（PID ${pid}）"
+        start_gate
+        start_watchdog
         return 0
     fi
 
@@ -171,45 +266,16 @@ start_process() {
 
     setup_env
     write_patch
-    rm -f "${TOKEN_FILE}"
 
     log "启动 dsh web（${LAN_IP}:${DSH_PORT}，入口 ${SERVICE_PORT}）"
-    cd "${DATA_DIR}" || return 1
-
-    # 参数说明：
-    #   --patch        叠加 pnpmCommand 补丁层（不修改用户配置）
-    #   --host/--port  绑定 NAS 局域网 IP（dsh 拒绝通配地址）
-    #   --trusted-host 允许从该 authority 访问（Origin 校验用）
-    #   --public-url   对外地址，决定 dsh 打印与回跳的 URL
-    #   --no-open      无桌面环境，不要尝试拉起浏览器
-    "${NODE_RUNTIME}" "${DSH_BIN}" web \
-        --patch "${PATCH_FILE}" \
-        --host "${LAN_IP}" \
-        --port "${DSH_PORT}" \
-        --trusted-host "${LAN_IP}:${DSH_PORT}" \
-        --public-url "http://${LAN_IP}:${DSH_PORT}/" \
-        --no-open >> "${LOG_FILE}" 2>&1 &
-    local dsh_pid=$!
-    printf '%s' "${dsh_pid}" > "${PID_FILE}"
-
-    if ! wait_token; then
-        kill -TERM "${dsh_pid}" 2>/dev/null || true
-        rm -f "${PID_FILE}"
+    if ! spawn_dsh; then
         tell "✗ DSH 启动失败，请查看日志 ${LOG_FILE}"
         return 1
     fi
-
-    # 入口跳转器：只做 302，跳转后流量直连 dsh
-    DSH_GATE_HOST="${LAN_IP}" \
-    DSH_GATE_PORT="${SERVICE_PORT}" \
-    DSH_WEB_HOST="${LAN_IP}" \
-    DSH_WEB_PORT="${DSH_PORT}" \
-    DSH_TOKEN_FILE="${TOKEN_FILE}" \
-        "${NODE_RUNTIME}" "${GATE_JS}" >> "${LOG_FILE}" 2>&1 &
-    printf '%s' "$!" > "${GATE_PID_FILE}"
+    dsh_pid=$(read_pid "${PID_FILE}")
+    start_gate
 
     # 10 秒探测：进程秒退要如实报错，不能误报启动成功
-    local i
     for i in $(seq 1 10); do
         if ! alive "${dsh_pid}"; then
             log "ERROR: dsh 进程在 ${i} 秒内退出"
@@ -219,6 +285,7 @@ start_process() {
         fi
         sleep 1
     done
+    start_watchdog
     log "已启动（dsh PID ${dsh_pid}，入口端口 ${SERVICE_PORT}）"
     return 0
 }
@@ -228,7 +295,15 @@ stop_process() {
     log "正在停止 ${APPNAME}"
     local pid
 
-    # 先停入口，避免跳转到正在关闭的服务
+    # 先停看门狗：否则它会把下面刚停掉的 dsh 又拉起来
+    if pid=$(read_pid "${WATCHDOG_PID_FILE}"); then
+        kill -TERM "${pid}" 2>/dev/null || true
+        sleep 1
+        alive "${pid}" && kill -KILL "${pid}" 2>/dev/null || true
+    fi
+    rm -f "${WATCHDOG_PID_FILE}" 2>/dev/null || true
+
+    # 再停入口，避免跳转到正在关闭的服务
     if pid=$(read_pid "${GATE_PID_FILE}"); then
         kill -TERM "${pid}" 2>/dev/null || true
     fi
@@ -249,7 +324,7 @@ stop_process() {
         [ -n "${pid}" ] && [ "${pid}" != "$$" ] && kill -KILL "${pid}" 2>/dev/null || true
     done
 
-    rm -f "${PID_FILE}" "${GATE_PID_FILE}" "${TOKEN_FILE}" 2>/dev/null || true
+    rm -f "${PID_FILE}" "${GATE_PID_FILE}" "${WATCHDOG_PID_FILE}" "${TOKEN_FILE}" 2>/dev/null || true
     sleep 1
     if ss -tln 2>/dev/null | grep -qE ":(${SERVICE_PORT}|${DSH_PORT}) "; then
         log "ERROR: 停止后端口仍被占用"
