@@ -27,7 +27,6 @@ ARCH=""
 OUT_DIR="${KIT_ROOT}/dist"
 STAGE_DIR="${KIT_ROOT}/stage"
 FROM_DIR=""
-BUNDLES_TGZ=""
 KEEP_STAGE=0
 PRINT_VERSION=0
 FNOS_NODE_RUNTIME="/var/apps/nodejs_v24/target/bin/node"
@@ -45,7 +44,6 @@ while [ $# -gt 0 ]; do
         --out|-o)     OUT_DIR="${2:?}"; shift 2 ;;
         --stage)      STAGE_DIR="${2:?}"; shift 2 ;;
         --from)       FROM_DIR="${2:?}"; shift 2 ;;
-        --bundles-tgz) BUNDLES_TGZ="${2:?}"; shift 2 ;;
         --keep-stage) KEEP_STAGE=1; shift ;;
         --print-version) PRINT_VERSION=1; shift ;;
         --help|-h)    usage 0 ;;
@@ -112,36 +110,31 @@ if [ "${PRINT_VERSION}" -eq 1 ]; then
 fi
 
 # ---------- 来源 ----------
-# 默认从 npm registry 装（@deepseek-ai/dsh 就是上游仓库的发布产物），
-# 免去在本机 pnpm build 整个 monorepo（2 核机器要跑很久）。
+# 默认从 npm registry 装：@deepseek-ai/dsh 就是上游 apps/cli 的发布产物，
+# 版本与上游 dsh-v* Release 一一对应，免去在本机构建整个 monorepo。
 # --from 指向已 `pnpm install && pnpm run build` 过的上游 checkout 时，
-# 改为从源码 pack 出 tgz 再装 —— 用于跟进尚未发布到 npm 的提交。
-DSH_PKG_SPEC="npm"
+# 改为从源码 pack 出 tgz —— 用于跟进尚未发布到 npm 的提交。
+DSH_SOURCE="npm"
 if [ -n "${FROM_DIR}" ]; then
     [ -d "${FROM_DIR}/packages" ] || die "--from 指向的不是 deepseek-harness 仓库: ${FROM_DIR}"
     command -v pnpm >/dev/null 2>&1 || die "源码模式需要 pnpm"
-    [ -f "${FROM_DIR}/node_modules/.modules.yaml" ] || \
-        die "源码模式需要先在该 checkout 里执行 pnpm install && pnpm run build"
+    [ -f "${FROM_DIR}/node_modules/.modules.yaml" ] \
+        || die "源码模式需要先在该 checkout 里执行 pnpm install && pnpm run build"
     TGZ_DIR="${KIT_ROOT}/.tgz"
     rm -rf "${TGZ_DIR}"; mkdir -p "${TGZ_DIR}"
     log "从源码 pack tgz: ${FROM_DIR}"
     ( cd "${FROM_DIR}" && pnpm --filter @deepseek-ai/dsh pack --pack-destination "${TGZ_DIR}" >/dev/null )
     TGZ="$(ls "${TGZ_DIR}" | grep -E '^deepseek-ai-dsh-[0-9]' | head -1 || true)"
     [ -n "${TGZ}" ] || die "pnpm pack 未产出 dsh tgz"
-    DSH_PKG_SPEC="file:${TGZ_DIR}/${TGZ}"
-    log "源码 tgz: ${DSH_PKG_SPEC}"
-    # 源码模式的版本号以 tgz 内 package.json 为准（可能高于最新 Release）
-    PKG_VERSION="$(tar -xzOf "${TGZ_DIR}/${TGZ}" package/package.json | node -p 'JSON.parse(require("fs").readFileSync(0,"utf8")).version')"
-    if [ -z "${VERSION}" ] || [ "${VERSION}" != "${PKG_VERSION}" ]; then
-        log "版本以源码为准: ${VERSION:-?} → ${PKG_VERSION}"
+    DSH_SOURCE="file:${TGZ_DIR}/${TGZ}"
+    # 源码模式的版本以 tgz 内 package.json 为准（可能高于最新 Release）
+    PKG_VERSION="$(tar -xzOf "${TGZ_DIR}/${TGZ}" package/package.json \
+        | node -p 'JSON.parse(require("fs").readFileSync(0,"utf8")).version')"
+    if [ "${VERSION}" != "${PKG_VERSION}" ]; then
+        log "版本以源码为准: ${VERSION} → ${PKG_VERSION}"
         VERSION="${PKG_VERSION}"
     fi
-    # 官方 bundle 集合：上游只在 monorepo 内 workspace 链接，npm 上未必有对应版本；
-    # 不随包装上会让 dsh web 启动即 ERR_MODULE_NOT_FOUND
-    if ( cd "${FROM_DIR}" && pnpm --filter @deepseek-ai/dsh-official-bundles pack --pack-destination "${TGZ_DIR}" >/dev/null 2>&1 ); then
-        B_TGZ="$(ls "${TGZ_DIR}" | grep -E '^deepseek-ai-dsh-official-bundles-' | head -1 || true)"
-        [ -n "${B_TGZ}" ] && BUNDLES_TGZ="file:${TGZ_DIR}/${B_TGZ}" && log "官方 bundle: ${BUNDLES_TGZ}"
-    fi
+    log "源码 tgz: ${DSH_SOURCE}"
 fi
 
 # ---------- 环境检查 ----------
@@ -161,8 +154,7 @@ STAGE_DIR="${STAGE_DIR}" \
 DSH_VERSION="${VERSION}" \
 TARGET_ARCH="${ARCH}" \
 NODE_ARCH="${NODE_ARCH}" \
-DSH_PKG_SPEC="${DSH_PKG_SPEC}" \
-DSH_BUNDLES_SPEC="${BUNDLES_TGZ}" \
+DSH_SOURCE="${DSH_SOURCE}" \
     bash "${KIT_ROOT}/scripts/assemble.sh"
 
 # ---------- 打包 ----------

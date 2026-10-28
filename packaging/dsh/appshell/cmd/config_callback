@@ -1,7 +1,4 @@
 #!/bin/bash
-
-# 配置变更后脚本：向导端口可能变化，重启服务使其生效。
-# cmd/ 位于应用根目录（TRIM_APPDEST 指向 target，其中不含 cmd/），
-# 故以脚本自身位置推导 main 的路径。
-"$(dirname "$0")/main" restart 2>/dev/null || true
+# 配置变更后：向导里改的端口会重新注入 TRIM_SERVICE_PORT，重启使监听生效。
+"$(dirname "$0")/main" restart >/dev/null 2>&1 || true
 exit 0

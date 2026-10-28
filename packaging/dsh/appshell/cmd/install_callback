@@ -1,20 +1,10 @@
 #!/bin/bash
-
-# 安装后脚本：确保应用数据目录存在，便于首次启动直接可用
+# 安装后：建好运行期目录，保证首次启动即可用。
 mkdir -p "${TRIM_PKGVAR}" 2>/dev/null || true
 
-# 把 manifest 交给应用用户：
-# manifest 默认属 root，运行器在需要把 version 对齐到实际运行版本时无法回写，
-# 会导致应用中心 / FnDepot 显示的已装版本长期停在安装时的 FPK 版本。
-# 这里放开这一个文件的写权限。
-# 安装器每次安装/升级都会重写 manifest，故每次回调都要重新执行。
-MANIFEST="$(cd "$(dirname "$0")/.." && pwd)/manifest"
-if [ -f "${MANIFEST}" ]; then
-    OWNER="$(stat -c '%u:%g' "${TRIM_APPDEST}" 2>/dev/null)"
-    if [ -n "${OWNER}" ]; then
-        chown "${OWNER}" "${MANIFEST}" 2>/dev/null || true
-    fi
-    chmod 644 "${MANIFEST}" 2>/dev/null || true
+# 共享数据目录（TRIM_DATA_SHARE_PATHS 形如 /vol1/@appshare/dsh:...）
+DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
+if [ -n "${DATA_DIR}" ]; then
+    mkdir -p "${DATA_DIR}/Documents" "${DATA_DIR}/.dsh" 2>/dev/null || true
 fi
-
 exit 0

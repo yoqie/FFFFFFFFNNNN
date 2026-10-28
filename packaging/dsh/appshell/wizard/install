@@ -4,7 +4,7 @@
     "items": [
       {
         "type": "tips",
-        "helpText": "DSH 使用官方默认端口 3080 提供 Web 服务（与官方 deepseek-harness 一致），飞牛桌面点击 DSH 图标即可打开。若 3080 被其他应用占用，请先停用占用方，或在应用安装后修改 manifest 与 ui/config 中的端口。"
+        "helpText": "DSH 使用官方默认端口 3080 提供 Web 界面，飞牛桌面点击 DSH 图标即可打开。\n\n首次安装请确认应用中心已安装 nodejs_v24 运行时（本包不内置 Node）。\n\n安装完成后首次打开可能需要等待几秒（服务正在启动）。"
       }
     ]
   }

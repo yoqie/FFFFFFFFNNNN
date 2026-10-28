@@ -1,353 +1,296 @@
 #!/bin/bash
 
-# DSH - 飞牛 fnOS 生命周期控制脚本
+# =============================================================
+# DSH —— 飞牛 fnOS 生命周期脚本
 #
-# 接入方式：端口模式。runner.js 监听 0.0.0.0:${SERVICE_PORT}，
-# 飞牛桌面入口（ui/config，type=iframe，port=3080）直接访问该端口。
+# 架构（无代理、无 cookie 伪造，全部用 dsh 自己的官方能力）：
 #
-# 运行依赖：应用中心 nodejs_v24 依赖包提供的 Node 运行时（manifest 已声明）
+#   浏览器 ──► 3080 gate（入口跳转器） ──302+令牌──► 3081 dsh web
+#                                                     │
+#                            Set-Cookie: dsh-auth-… ◄─┘（dsh 自己签发）
+#
+#   * dsh web 直接绑定 NAS 的局域网 IP（官方 --host，不接受 0.0.0.0）
+#   * 浏览器认证走 dsh 自己的「启动令牌 → 持久 cookie」流程
+#   * gate 只做一次 302，跳转后所有流量直连 dsh（含 WebSocket）
+#
+# 环境：Node 由应用中心 nodejs_v24 提供（manifest 的 install_dep_apps）
+# =============================================================
+
+set -u
 
 APPNAME="${TRIM_APPNAME:-dsh}"
+APPDEST="${TRIM_APPDEST:-}"
+PKGVAR="${TRIM_PKGVAR:-}"
 
-TRIM_APPDEST="${TRIM_APPDEST:-}"
-TRIM_PKGVAR="${TRIM_PKGVAR:-}"
-
-if [ -z "${TRIM_APPDEST}" ] || [ -z "${TRIM_PKGVAR}" ]; then
-    echo "ERROR: TRIM_APPDEST or TRIM_PKGVAR not set" >&2
+if [ -z "${APPDEST}" ] || [ -z "${PKGVAR}" ]; then
+    echo "ERROR: TRIM_APPDEST / TRIM_PKGVAR 未设置" >&2
     exit 1
 fi
 
-# 对外服务端口：由系统按 manifest 的 service_port 注入，
-# 同时与 ui/config 中桌面入口的 port 保持一致（两处必须相同）
+# 对外端口（飞牛桌面入口 / manifest 的 service_port）；dsh 本体用下一个端口
 SERVICE_PORT="${TRIM_SERVICE_PORT:-3080}"
-# 内部端口：dsh web 只监听回环，由 runner 代理
-INTERNAL_PORT=$((SERVICE_PORT + 1))
-PORT_PATTERN=":(${SERVICE_PORT}|${INTERNAL_PORT}) "
+DSH_PORT=$((SERVICE_PORT + 1))
 
-# 系统依赖的 Node 运行时（应用中心 nodejs_v24 包）
 NODE_RUNTIME="/var/apps/nodejs_v24/target/bin/node"
+DSH_BIN="${APPDEST}/node_modules/@deepseek-ai/dsh/lib/bin.js"
+GATE_JS="${APPDEST}/gate/gate.js"
+PATCH_FILE="${APPDEST}/gate/fnos.yml"
+PNPM_BIN="${APPDEST}/node_modules/.bin/pnpm"
 
-# 数据目录：优先共享目录（飞牛文件管理可见、SMB 可访问），回退 var 目录
-DSH_DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
-if [ -z "${DSH_DATA_DIR}" ] || [ ! -d "${DSH_DATA_DIR}" ]; then
-    DSH_DATA_DIR="${TRIM_PKGVAR}"
+# 数据目录：优先共享目录（文件管理 / SMB 可见），回退 var 目录
+DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
+if [ -z "${DATA_DIR}" ] || [ ! -d "${DATA_DIR}" ]; then
+    DATA_DIR="${PKGVAR}"
 fi
-mkdir -p "${DSH_DATA_DIR}" 2>/dev/null || true
+mkdir -p "${DATA_DIR}" 2>/dev/null || true
 
-LOG_FILE="${TRIM_PKGVAR}/${APPNAME}.log"
-PID_FILE="${TRIM_PKGVAR}/${APPNAME}.pid"
+LOG_FILE="${PKGVAR}/${APPNAME}.log"
+PID_FILE="${PKGVAR}/${APPNAME}.pid"
+GATE_PID_FILE="${PKGVAR}/${APPNAME}-gate.pid"
+TOKEN_FILE="${PKGVAR}/launch-token"
 
-log_msg() {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "${LOG_FILE}"
+log() { echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "${LOG_FILE}"; }
+tell() { echo "$1" > "${TRIM_TEMP_LOGFILE:-/dev/null}" 2>/dev/null || true; }
+
+# 日志超过 10MB 轮转一份，避免无限增长
+if [ -f "${LOG_FILE}" ] && [ "$(stat -c%s "${LOG_FILE}" 2>/dev/null || echo 0)" -gt 10485760 ]; then
+    mv -f "${LOG_FILE}" "${LOG_FILE}.1" 2>/dev/null || true
+fi
+
+alive() { [ -n "${1:-}" ] && kill -0 "$1" 2>/dev/null; }
+
+read_pid() {
+    local file="$1" pid
+    [ -f "${file}" ] || return 1
+    pid=$(head -n 1 "${file}" 2>/dev/null | tr -d '[:space:]')
+    alive "${pid}" || return 1
+    printf '%s' "${pid}"
 }
 
-# 日志轮转：超过 10MB 保留一份 .log.1，避免日志无限增长
-rotate_log_if_needed() {
-    [ -f "${LOG_FILE}" ] || return 0
-    local size
-    size=$(stat -c%s "${LOG_FILE}" 2>/dev/null || echo 0)
-    if [ "${size}" -gt $((10 * 1024 * 1024)) ]; then
-        mv -f "${LOG_FILE}" "${LOG_FILE}.1" 2>/dev/null || true
-        log_msg "日志已轮转（${size} 字节）"
+# 按命令行特征找回实例（PID 文件丢失时的兜底）
+find_dsh_pid() { pgrep -f "${DSH_BIN} web --patch" 2>/dev/null | head -n 1; }
+find_gate_pid() { pgrep -f "${GATE_JS}" 2>/dev/null | grep -vx "$$" | head -n 1; }
+
+# ---------- 局域网地址 ----------
+# dsh 的 --host 必须是一个具体的本机地址（通配地址会被拒绝），
+# 取默认路由的源地址最接近"用户实际访问的那个 IP"。
+detect_lan_ip() {
+    local ip=""
+    ip=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p' | head -n 1)
+    [ -n "${ip}" ] || ip=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9.]+$' | grep -v '^127\.' | head -n 1)
+    [ -n "${ip}" ] || ip="127.0.0.1"
+    printf '%s' "${ip}"
+}
+
+# ---------- 运行时环境 ----------
+setup_env() {
+    LAN_IP="${DSH_LAN_IP:-$(detect_lan_ip)}"
+
+    export HOME="${DATA_DIR}"
+    # dsh 的 home 解析顺序是 显式配置 > $DSH_HOME > os.homedir()/.dsh；
+    # os.homedir() 读 passwd 家目录（不认 $HOME），不设会把配置与凭据写到
+    # /home/<app>/.dsh，导致每次重装都丢配置。DSH_HOME 指向 .dsh 本身。
+    export DSH_HOME="${DATA_DIR}/.dsh"
+    mkdir -p "${DSH_HOME}" 2>/dev/null || true
+
+    # 默认工作区定位用 xdg-user-dir DOCUMENTS；fnOS 未配置该 XDG 变量时它会
+    # 回退到 $HOME，而 dsh 认为"文档目录 == HOME"不可用，会报无法创建工作区。
+    mkdir -p "${DATA_DIR}/Documents" 2>/dev/null || true
+    export XDG_DOCUMENTS_DIR="${DATA_DIR}/Documents"
+
+    # 应用用户的登录 shell 是 nologin；不指定会让内置终端一开就退出
+    export SHELL="/bin/bash"
+
+    export PATH="$(dirname "${NODE_RUNTIME}"):/usr/local/bin:/usr/bin:/bin"
+}
+
+# ---------- 补丁层 ----------
+# 用 --patch 叠加一个只读补丁（不碰用户的 cordis.patch.yml）：
+#   plugin-manager 的 pnpmCommand 指向随包的 pnpm，插件市场/插件安装才可用。
+# dsh 的插件安装器直接 execa("pnpm")，服务端 PATH 里没有 pnpm 就会失败；
+# 官方提供了 pnpmCommand 配置项，比改 PATH 干净。
+write_patch() {
+    mkdir -p "$(dirname "${PATCH_FILE}")" 2>/dev/null || true
+    if [ -x "${PNPM_BIN}" ]; then
+        cat > "${PATCH_FILE}" <<YAML
+# 由 fnOS 应用启动脚本生成，请勿手工修改（每次启动会重写）
+- id: plugin-manager
+  name: '@deepseek-ai/dsh-plugin-manager'
+  config:
+    pnpmCommand: '${PNPM_BIN}'
+YAML
+    else
+        # 没带上 pnpm 时保持上游默认（插件安装不可用，核心功能不受影响）
+        cat > "${PATCH_FILE}" <<'YAML'
+# 由 fnOS 应用启动脚本生成，请勿手工修改（每次启动会重写）
+[]
+YAML
     fi
 }
-rotate_log_if_needed
 
-instance_alive() {
-    local pid="$1"
-    [ -n "${pid}" ] && kill -0 "${pid}" 2>/dev/null
-}
-
-# 按命令行特征找回存活实例（PID 文件丢失或失效时的兜底），排除脚本自身
-runner_pid() {
-    pgrep -f "${TRIM_APPDEST}/bin/runner.js" 2>/dev/null | grep -vx "$$" | head -n 1
-}
-
-recover_running_instance() {
-    local pid
-    pid=$(runner_pid)
-    if instance_alive "${pid}"; then
-        printf "%s" "${pid}" > "${PID_FILE}"
-        log_msg "已找回运行中的实例 PID ${pid}"
-        return 0
-    fi
+# ---------- 启动 ----------
+wait_token() {
+    # dsh 打印的地址里带一次性启动令牌；取到后写进文件供 gate 使用
+    local i token
+    for i in $(seq 1 120); do
+        token=$(grep -o 'token=[A-Za-z0-9_-]\{16,\}' "${LOG_FILE}" 2>/dev/null | tail -n 1 | cut -d= -f2)
+        if [ -n "${token}" ]; then
+            printf '%s' "${token}" > "${TOKEN_FILE}"
+            log "已取得启动令牌（长度 ${#token}）"
+            return 0
+        fi
+        sleep 1
+    done
+    log "ERROR: 60 秒内未取得启动令牌"
     return 1
 }
 
-# 启动前检查：Node 运行时与 DSH 本体是否就绪
-preflight_check() {
-    if [ ! -x "${NODE_RUNTIME}" ]; then
-        log_msg "ERROR: 未找到 Node 运行时 ${NODE_RUNTIME}"
-        echo "✗ 未找到 Node.js 运行时，请确认应用中心已安装 nodejs_v24" > "${TRIM_TEMP_LOGFILE}" 2>/dev/null || true
-        return 1
-    fi
-    if [ ! -f "${TRIM_APPDEST}/node_modules/@deepseek-ai/dsh/lib/bin.js" ]; then
-        log_msg "ERROR: DSH 本体缺失"
-        echo "✗ DSH 本体缺失，安装包不完整，请重新下载安装。" > "${TRIM_TEMP_LOGFILE}" 2>/dev/null || true
-        return 1
-    fi
-    return 0
-}
-
-# 向 profile 的补丁层写入一个 YAML 条目（幂等）。
-# dsh 生成的模板顶层是空数组 []，直接追加会产生两个 YAML 根节点，
-# 故对空模板做替换、已有内容才追加。
-# 用法：patch_profile_entry <识别关键字> <条目文本>
-patch_profile_entry() {
-    local marker="$1" entry="$2"
-    local patch_file="${DSH_HOME}/profiles/web/cordis.patch.yml"
-
-    if [ -f "${patch_file}" ] && grep -q "${marker}" "${patch_file}" 2>/dev/null; then
-        return 0
-    fi
-    mkdir -p "$(dirname "${patch_file}")" 2>/dev/null || true
-
-    if [ ! -f "${patch_file}" ]; then
-        printf '%s\n' "${entry}" > "${patch_file}"
-    elif grep -qE '^[[:space:]]*\[[[:space:]]*\][[:space:]]*$' "${patch_file}"; then
-        local body
-        body=$(grep -vE '^[[:space:]]*\[[[:space:]]*\][[:space:]]*$' "${patch_file}")
-        printf '%s\n\n%s\n' "${body}" "${entry}" > "${patch_file}"
-    else
-        printf '\n%s\n' "${entry}" >> "${patch_file}"
-    fi
-}
-
-# 启用侧边栏浏览器标签（Web 模式默认关闭，但实现支持 iframe 载体）
-enable_sidebar_browser() {
-    patch_profile_entry "ui-sidebar-browser" '- id: ui-sidebar-browser
-  disabled: false'
-    log_msg "已配置 profile 补丁：启用侧边栏浏览器标签"
-}
-
-# 清理历史版本内置的更新插件 dsh-updater。
-# 现在不再随包提供该插件：早期包会把它注册进 profile 的 bundles / dependencies，
-# 并把应用内插件同步到 profile/node_modules；残留声明会让 dsh 在加载 bundle 时
-# 找不到包而报错，因此每次启动前主动摘除。
-disable_updater_bundle() {
-    local pkg_file="${DSH_HOME}/profiles/web/package.json"
-    local dest="${DSH_HOME}/profiles/web/node_modules/dsh-updater"
-    local src="${TRIM_APPDEST}/node_modules/dsh-updater"
-
-    rm -rf "${dest}" "${src}" 2>/dev/null || true
-    [ -f "${pkg_file}" ] || return 0
-    grep -q "dsh-updater" "${pkg_file}" 2>/dev/null || return 0
-
-    local node_bin="${NODE_RUNTIME:-node}"
-    "${node_bin}" -e '
-        const fs = require("fs");
-        const file = process.argv[1];
-        const pkg = JSON.parse(fs.readFileSync(file, "utf8"));
-        let changed = false;
-        const bundles = pkg.dsh && pkg.dsh.profile && pkg.dsh.profile.bundles;
-        if (Array.isArray(bundles)) {
-            const kept = bundles.filter((b) => b !== "dsh-updater");
-            if (kept.length !== bundles.length) {
-                pkg.dsh.profile.bundles = kept;
-                changed = true;
-            }
-        }
-        if (pkg.dependencies && Object.prototype.hasOwnProperty.call(pkg.dependencies, "dsh-updater")) {
-            delete pkg.dependencies["dsh-updater"];
-            changed = true;
-        }
-        if (changed) fs.writeFileSync(file, JSON.stringify(pkg, null, 2) + "\n");
-    ' "${pkg_file}" 2>/dev/null && log_msg "已摘除历史更新插件 dsh-updater"
-}
-
 start_process() {
-    log_msg "正在启动 ${APPNAME}（端口 ${SERVICE_PORT}）..."
-
-    # 已在运行则直接返回
-    if [ -f "${PID_FILE}" ]; then
-        local old_pid
-        old_pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
-        if instance_alive "${old_pid}"; then
-            log_msg "${APPNAME} 已在运行，PID ${old_pid}"
-            return 0
-        fi
-        rm -f "${PID_FILE}"
+    local pid
+    if pid=$(read_pid "${PID_FILE}"); then
+        log "${APPNAME} 已在运行（PID ${pid}）"
+        return 0
     fi
-    if recover_running_instance; then
+    pid=$(find_dsh_pid)
+    if alive "${pid}"; then
+        printf '%s' "${pid}" > "${PID_FILE}"
+        log "已找回运行中的 dsh（PID ${pid}）"
         return 0
     fi
 
-    preflight_check || return 1
-
-    # 对外端口被占用则明确报错（提示用户更换端口）
-    if netstat -tln 2>/dev/null | grep -qE "${PORT_PATTERN}"; then
-        log_msg "ERROR: 端口 ${SERVICE_PORT}/${INTERNAL_PORT} 已被占用"
-        echo "✗ 端口 ${SERVICE_PORT} 已被占用，请在应用设置中更换端口" > "${TRIM_TEMP_LOGFILE}" 2>/dev/null || true
+    if [ ! -x "${NODE_RUNTIME}" ]; then
+        log "ERROR: 未找到 Node 运行时 ${NODE_RUNTIME}"
+        tell "✗ 未找到 Node.js 运行时，请先在应用中心安装 nodejs_v24"
+        return 1
+    fi
+    if [ ! -f "${DSH_BIN}" ]; then
+        log "ERROR: DSH 本体缺失 ${DSH_BIN}"
+        tell "✗ DSH 本体缺失，安装包不完整，请重新安装"
         return 1
     fi
 
-    # 应用 bin 目录前置：里面的 xdg-open 垫片负责把配置文件导出到共享目录
-    export PATH="${TRIM_APPDEST}/bin:$(dirname "${NODE_RUNTIME}"):${PATH}"
-    export DSH_EXPORT_DIR="${DSH_DATA_DIR}/config-export"
-    export HOME="${DSH_DATA_DIR}"
-    # 必须显式设置 DSH_HOME：dsh 的 home 解析优先级为
-    #   显式配置 > $DSH_HOME > os.homedir()/.dsh
-    # 而 os.homedir() 取 passwd 中的家目录（/home/dsh），不认 $HOME。
-    # 不设置会使 dsh 把配置与凭据写到 /home/dsh/.dsh，
-    # 导致 runner 预置的认证密钥不被读取、前端认证失败。
-    # 注意：DSH_HOME 指向 .dsh 目录本身。
-    export DSH_HOME="${DSH_DATA_DIR}/.dsh"
-    # 默认工作区目录：dsh 首次使用时会用 `xdg-user-dir DOCUMENTS` 定位系统文档
-    # 目录，并在其下创建 deepseek-harness/default-workspace。
-    # fnOS 未配置 XDG_DOCUMENTS_DIR，该命令会回退返回 $HOME，而 dsh 判定
-    # 「文档目录等于 HOME」即视为不可用并报错（前端提示"无法创建默认工作区"）。
-    # 显式指定文档目录到共享目录下，使工作区落在飞牛文件管理可见的位置。
-    mkdir -p "${DSH_DATA_DIR}/Documents" 2>/dev/null || true
-    export XDG_DOCUMENTS_DIR="${DSH_DATA_DIR}/Documents"
-    # 交互终端使用的 shell：dsh 解析顺序为 $SHELL → passwd 中的登录 shell。
-    # 飞牛为应用创建的用户登录 shell 是 /usr/sbin/nologin（所有应用用户皆如此），
-    # 不指定会让侧边栏终端直接退出并提示 "This account is currently not available."。
-    export SHELL="/bin/bash"
-    # 启用 Web 模式下默认关闭的侧边栏浏览器标签。
-    # dsh 的 web-app bundle 中该插件带 disabled 条件（仅 desktop profile 开启），
-    # 但其实现同时支持 iframe（Web）与 webview（桌面）两种载体。
-    # profile 的用户补丁层 cordis.patch.yml 会在 bundle 之后应用，
-    # 以 id 匹配覆盖 disabled 即可启用。
-    # 注意：dsh 只在文件不存在时写入模板，故已存在的补丁不会被覆盖。
-    enable_sidebar_browser
-    # 摘除历史版本的更新插件声明（早期包自带 dsh-updater，现已不再随包提供）
-    disable_updater_bundle
-    export PORT="${SERVICE_PORT}"
-    export DSH_PORT="${INTERNAL_PORT}"
-    export TRIM_APPDEST="${TRIM_APPDEST}"
-    export TRIM_PKGVAR="${TRIM_PKGVAR}"
-    # manifest 位于包目录（本脚本所在目录的上一级），不在 TRIM_APPDEST（内容目录）里。
-    # 传给运行器，供其在应用内更新成功后把 version 对齐到实际运行版本。
-    export DSH_MANIFEST="$(cd "$(dirname "$0")/.." && pwd)/manifest"
+    setup_env
+    write_patch
+    rm -f "${TOKEN_FILE}"
 
-    # 以数据目录为工作目录启动运行器
-    cd "${DSH_DATA_DIR}" || return 1
+    log "启动 dsh web（${LAN_IP}:${DSH_PORT}，入口 ${SERVICE_PORT}）"
+    cd "${DATA_DIR}" || return 1
 
-    "${NODE_RUNTIME}" "${TRIM_APPDEST}/bin/runner.js" >> "${LOG_FILE}" 2>&1 &
-    local new_pid=$!
-    printf "%s" "${new_pid}" > "${PID_FILE}"
-    log_msg "已启动，PID ${new_pid}"
+    # 参数说明：
+    #   --patch        叠加 pnpmCommand 补丁层（不修改用户配置）
+    #   --host/--port  绑定 NAS 局域网 IP（dsh 拒绝通配地址）
+    #   --trusted-host 允许从该 authority 访问（Origin 校验用）
+    #   --public-url   对外地址，决定 dsh 打印与回跳的 URL
+    #   --no-open      无桌面环境，不要尝试拉起浏览器
+    "${NODE_RUNTIME}" "${DSH_BIN}" web \
+        --patch "${PATCH_FILE}" \
+        --host "${LAN_IP}" \
+        --port "${DSH_PORT}" \
+        --trusted-host "${LAN_IP}:${DSH_PORT}" \
+        --public-url "http://${LAN_IP}:${DSH_PORT}/" \
+        --no-open >> "${LOG_FILE}" 2>&1 &
+    local dsh_pid=$!
+    printf '%s' "${dsh_pid}" > "${PID_FILE}"
 
-    # 探测 10 秒：若进程秒退则如实报错，避免误报启动成功
-    local count=0
-    while [ ${count} -lt 10 ]; do
-        if ! kill -0 "${new_pid}" 2>/dev/null; then
-            log_msg "启动失败：进程在 ${count} 秒内退出"
-            rm -f "${PID_FILE}"
+    if ! wait_token; then
+        kill -TERM "${dsh_pid}" 2>/dev/null || true
+        rm -f "${PID_FILE}"
+        tell "✗ DSH 启动失败，请查看日志 ${LOG_FILE}"
+        return 1
+    fi
+
+    # 入口跳转器：只做 302，跳转后流量直连 dsh
+    DSH_GATE_HOST="${LAN_IP}" \
+    DSH_GATE_PORT="${SERVICE_PORT}" \
+    DSH_WEB_HOST="${LAN_IP}" \
+    DSH_WEB_PORT="${DSH_PORT}" \
+    DSH_TOKEN_FILE="${TOKEN_FILE}" \
+        "${NODE_RUNTIME}" "${GATE_JS}" >> "${LOG_FILE}" 2>&1 &
+    printf '%s' "$!" > "${GATE_PID_FILE}"
+
+    # 10 秒探测：进程秒退要如实报错，不能误报启动成功
+    local i
+    for i in $(seq 1 10); do
+        if ! alive "${dsh_pid}"; then
+            log "ERROR: dsh 进程在 ${i} 秒内退出"
+            tell "✗ DSH 启动失败，请查看日志 ${LOG_FILE}"
+            rm -f "${PID_FILE}" "${GATE_PID_FILE}" "${TOKEN_FILE}"
             return 1
         fi
         sleep 1
-        count=$((count + 1))
     done
+    log "已启动（dsh PID ${dsh_pid}，入口端口 ${SERVICE_PORT}）"
     return 0
 }
 
+# ---------- 停止 ----------
 stop_process() {
-    log_msg "正在停止 ${APPNAME}..."
+    log "正在停止 ${APPNAME}"
+    local pid
 
-    # 先发 TERM 让 runner 优雅回收 dsh 子进程
-    if [ -f "${PID_FILE}" ]; then
-        local pid
-        pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
-        if instance_alive "${pid}"; then
-            kill -TERM "${pid}" 2>/dev/null || true
-            local count=0
-            while kill -0 "${pid}" 2>/dev/null && [ $count -lt 5 ]; do
-                sleep 1
-                count=$((count + 1))
-            done
-            if kill -0 "${pid}" 2>/dev/null; then
-                log_msg "强制结束 PID ${pid}"
-                kill -KILL "${pid}" 2>/dev/null || true
-            fi
-        fi
+    # 先停入口，避免跳转到正在关闭的服务
+    if pid=$(read_pid "${GATE_PID_FILE}"); then
+        kill -TERM "${pid}" 2>/dev/null || true
+    fi
+    for pid in $(find_gate_pid); do kill -TERM "${pid}" 2>/dev/null || true; done
+
+    if pid=$(read_pid "${PID_FILE}"); then
+        kill -TERM "${pid}" 2>/dev/null || true
+        local i
+        for i in $(seq 1 10); do
+            alive "${pid}" || break
+            sleep 1
+        done
+        alive "${pid}" && kill -KILL "${pid}" 2>/dev/null || true
     fi
 
-    # 清理残留的 runner / dsh 进程（路径限定，避免误杀无关进程）
-    local cleanup_pids
-    cleanup_pids=$(
-        pgrep -f "${TRIM_APPDEST}/bin/runner\.js" 2>/dev/null
-        pgrep -f "${TRIM_APPDEST}/node_modules/@deepseek-ai/dsh.*bin\.js web" 2>/dev/null
-    )
-    for pid in $(echo "${cleanup_pids}" | sort -un); do
-        [ -z "${pid}" ] && continue
-        [ "${pid}" = "$$" ] && continue
-        kill -9 "${pid}" 2>/dev/null || true
+    # 兜底：清理路径限定在本应用的残留进程，避免误杀
+    for pid in $(pgrep -f "${DSH_BIN}" 2>/dev/null; pgrep -f "${GATE_JS}" 2>/dev/null); do
+        [ -n "${pid}" ] && [ "${pid}" != "$$" ] && kill -KILL "${pid}" 2>/dev/null || true
     done
 
-    # 确认端口已释放，否则如实报告失败
+    rm -f "${PID_FILE}" "${GATE_PID_FILE}" "${TOKEN_FILE}" 2>/dev/null || true
     sleep 1
-    if ss -tln 2>/dev/null | grep -qE "${PORT_PATTERN}"; then
-        log_msg "ERROR: 停止后端口仍被占用"
-        rm -f "${PID_FILE}" 2>/dev/null || true
+    if ss -tln 2>/dev/null | grep -qE ":(${SERVICE_PORT}|${DSH_PORT}) "; then
+        log "ERROR: 停止后端口仍被占用"
         return 1
     fi
-    rm -f "${PID_FILE}" 2>/dev/null || true
-    log_msg "已停止"
+    log "已停止"
     return 0
 }
 
 status_process() {
-    if [ -f "${PID_FILE}" ]; then
-        local pid
-        pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
-        if instance_alive "${pid}"; then
-            return 0
-        fi
-        rm -f "${PID_FILE}"
-    fi
-    if recover_running_instance; then
+    local pid
+    if pid=$(read_pid "${PID_FILE}"); then return 0; fi
+    pid=$(find_dsh_pid)
+    if alive "${pid}"; then
+        printf '%s' "${pid}" > "${PID_FILE}"
         return 0
     fi
     return 3
 }
 
-case "$1" in
-start)
-    if start_process; then
-        echo "✓ 启动成功"
+case "${1:-}" in
+    start)
+        if start_process; then echo "✓ 启动成功"; exit 0; else echo "✗ 启动失败（日志 ${LOG_FILE}）"; exit 1; fi
+        ;;
+    stop)
+        if stop_process; then echo "✓ 已停止"; exit 0; else echo "✗ 停止失败：端口仍被占用"; exit 1; fi
+        ;;
+    uninstall)
+        stop_process >/dev/null 2>&1
+        echo "✓ 已清理"
         exit 0
-    else
-        echo "✗ 启动失败"
+        ;;
+    status)
+        if status_process; then echo "✓ 服务运行中"; exit 0; else echo "✗ 服务未运行"; exit 3; fi
+        ;;
+    restart)
+        stop_process >/dev/null 2>&1
+        if start_process; then echo "✓ 重启成功"; exit 0; else echo "✗ 重启失败"; exit 1; fi
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|status|restart|uninstall}"
         exit 1
-    fi
-    ;;
-stop)
-    if stop_process; then
-        echo "✓ 已停止"
-        exit 0
-    else
-        echo "✗ 停止失败：端口 ${SERVICE_PORT} 仍被占用，请查看日志 ${LOG_FILE}"
-        exit 1
-    fi
-    ;;
-uninstall)
-    stop_process
-    echo "✓ 已清理"
-    exit 0
-    ;;
-status)
-    if status_process; then
-        echo "✓ 服务运行中"
-        exit 0
-    else
-        echo "✗ 服务未运行"
-        exit 3
-    fi
-    ;;
-restart)
-    stop_process
-    sleep 1
-    if start_process; then
-        echo "✓ 重启成功"
-        exit 0
-    else
-        echo "✗ 重启失败"
-        exit 1
-    fi
-    ;;
-*)
-    echo "Usage: $0 {start|stop|status|restart|uninstall}"
-    exit 1
-    ;;
+        ;;
 esac

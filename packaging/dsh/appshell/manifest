@@ -1,7 +1,7 @@
 appname               = dsh
 version               = 0.2.2-alpha.2
 display_name          = DSH
-desc                  = DeepSeek Harness（DSH）飞牛NAS版：上游 deepseek-harness 的 fnOS 原生安装包，amd64/arm64 双架构，飞牛桌面一键打开。
+desc                  = DeepSeek Harness（DSH）飞牛NAS版：上游 deepseek-harness 官方 Web UI，amd64/arm64 双架构原生包，飞牛桌面一键打开。
 platform              = all
 source                = thirdparty
 maintainer            = deepseek-ai
