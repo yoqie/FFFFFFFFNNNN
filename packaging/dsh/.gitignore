@@ -1,0 +1,5 @@
+dist/
+stage/
+.tools/
+.tgz/
+*.fpk

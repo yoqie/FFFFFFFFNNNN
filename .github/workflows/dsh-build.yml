@@ -1,0 +1,277 @@
+# =============================================================
+# DSH for fnOS —— 跟随上游自动构建并发布 fpk（amd64 + arm64）
+#
+# 打包逻辑全在 packaging/dsh/ 里（build.sh + scripts/assemble.sh + appshell/），
+# 本工作流只负责「什么时候构建、在哪台机器构建、产物发到哪」：
+#
+#   prepare  解析上游最新版本（dsh-v* Release），定时任务下版本没变就跳过
+#   build    矩阵：amd64 → ubuntu-24.04，arm64 → ubuntu-24.04-arm
+#            各自原生 npm 安装，原生模块与目标架构一致（免交叉编译坑）
+#   release  双架构产物汇总，发布 Release（tag: dsh-<版本>，同一版本覆盖更新）
+#   index    登记索引（apps/dsh.json / build/dsh/meta.json）→ 汇总 fnpack.json
+#            → 清理旧 Release → 提交推送
+#
+# 触发：每小时检查上游 / 手动 / packaging/dsh 有改动时
+# =============================================================
+name: dsh-build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "指定上游版本（留空 = 上游最新 Release）"
+        required: false
+        default: ""
+      force:
+        description: "版本没变也强制重建（打包修复后重发用）"
+        type: boolean
+        required: false
+        default: false
+  schedule:
+    # 每小时 10 分检查一次上游；没新版几秒就跳过，不浪费 CI
+    - cron: "10 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - "packaging/dsh/**"
+      - "scripts/finalize-dsh.mjs"
+      - ".github/workflows/dsh-build.yml"
+
+permissions:
+  contents: write
+
+# 同一时间只允许一个构建；不取消进行中的（避免产物/索引半途而废）
+concurrency:
+  group: dsh-build
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPO: deepseek-ai/deepseek-harness
+
+jobs:
+  # -----------------------------------------------------------
+  # 1. 解析版本 + 判断是否需要构建
+  # -----------------------------------------------------------
+  prepare:
+    name: 解析上游版本
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      skip: ${{ steps.ver.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 确定要构建的版本
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version || '' }}
+          FORCE: ${{ inputs.force || 'false' }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          VER="${INPUT_VERSION}"
+          if [ -z "${VER}" ]; then
+            # 上游最新一个非草稿 Release 的 dsh-v* tag（含预发布，与"跟随上游发布"一致）
+            VER=$(curl -sf -H "Authorization: Bearer ${GH_TOKEN}" \
+                "https://api.github.com/repos/${UPSTREAM_REPO}/releases?per_page=30" \
+              | node -e '
+                  let s = "";
+                  process.stdin.on("data", (c) => { s += c; })
+                    .on("end", () => {
+                        let rels = [];
+                        try { rels = JSON.parse(s); } catch { /* 限流或断网 */ }
+                        if (!Array.isArray(rels)) return console.log("");
+                        const rel = rels.find((r) => !r.draft && String(r.tag_name || "").startsWith("dsh-v"));
+                        console.log(rel ? String(rel.tag_name).replace(/^dsh-v/, "") : "");
+                    });
+                ')
+          fi
+          if [ -z "${VER}" ]; then
+            echo "::error::无法确定上游版本（GitHub API 限流？）可用 workflow_dispatch 手动指定 version"
+            exit 1
+          fi
+          echo "上游版本: ${VER}"
+
+          # 定时任务：已打包过同一上游版本就跳过（手动触发 / force / push 永远构建）
+          PACKED=$(cat build/dsh/packed-upstream.txt 2>/dev/null | tr -d '[:space:]' || true)
+          if [ "${EVENT}" = "schedule" ] && [ "${FORCE}" != "true" ] && [ "${PACKED}" = "${VER}" ]; then
+            echo "已打包过 ${VER}，跳过构建"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+
+  # -----------------------------------------------------------
+  # 2. 双架构构建
+  # -----------------------------------------------------------
+  build:
+    name: 构建 ${{ matrix.arch }}
+    needs: prepare
+    if: needs.prepare.outputs.skip != 'true'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # x86_64：AMD/Intel NAS 主流架构
+          - arch: amd64
+            runner: ubuntu-24.04
+          # ARM64 NAS：公共仓库的 ARM 原生运行器免费
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      # npm 缓存：同一上游版本重复构建（例如 force 重发）不必重装 600+ 个包
+      - name: 缓存 npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-dsh-${{ matrix.arch }}-${{ needs.prepare.outputs.version }}
+          restore-keys: npm-dsh-${{ matrix.arch }}-
+
+      - name: 打包 fpk
+        env:
+          DSH_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          # 用 bash 显式调用：不依赖 checkout 出来的可执行位
+          bash packaging/dsh/build.sh \
+            --version "${DSH_VERSION}" \
+            --arch "${{ matrix.arch }}" \
+            --out dist
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: DSH_${{ needs.prepare.outputs.version }}_${{ matrix.arch }}
+          path: dist/*.fpk
+          if-no-files-found: error
+
+  # -----------------------------------------------------------
+  # 3. 发布 Release（双架构汇总）
+  # -----------------------------------------------------------
+  release:
+    name: 发布 Release
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 汇总双架构产物
+        uses: actions/download-artifact@v4
+        with:
+          pattern: DSH_*
+          merge-multiple: true
+          path: dist
+
+      - name: 检查产物
+        run: |
+          set -euo pipefail
+          ls -la dist
+          COUNT=$(ls dist/*.fpk 2>/dev/null | wc -l)
+          echo "待发布 fpk 数量: ${COUNT}"
+          [ "${COUNT}" -ge 1 ] || { echo "::error::没有产物可发布"; exit 1; }
+
+      - name: 生成 Release 说明
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VER: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          # 更新内容取自上游 deepseek-harness 对应 tag 的 Release 正文；取不到就回退一行提示
+          UPSTREAM_NOTES=$(node scripts/upstream-note.mjs \
+            --repo "${UPSTREAM_REPO}" \
+            --version "${VER}" \
+            --tags 'dsh-v{v},v{v},{v}' 2>/dev/null || true)
+          [ -n "${UPSTREAM_NOTES}" ] || UPSTREAM_NOTES="（上游未提供该版本的更新说明）"
+          cat > /tmp/release-notes.md <<NOTES
+          DeepSeek Harness v${VER} 飞牛 fnOS 版（GitHub Actions 双架构原生构建）。
+
+          **按 NAS 架构下载**：
+          - x86_64（AMD/Intel，绝大多数 NAS 与虚拟机）→ \`DSH_v${VER}_amd64.fpk\`
+          - ARM64 → \`DSH_v${VER}_arm64.fpk\`
+
+          ## 更新内容（同步自上游）
+
+          ${UPSTREAM_NOTES}
+
+          **安装/升级**：
+          1. 下载与 NAS 架构对应的 fpk
+          2. 飞牛应用中心 → 手动安装 → 上传该文件（已安装则覆盖升级）
+          3. 依赖：应用中心需已安装 \`nodejs_v24\` 运行时
+          4. 端口默认 3080（安装后可在应用设置中修改）
+
+          **访问**：飞牛桌面点 DSH 卡片，或浏览器打开 \`http://NAS地址:3080\`
+          NOTES
+          cat /tmp/release-notes.md
+
+      - name: 发布 / 更新 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VER: ${{ needs.prepare.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          TAG="dsh-${VER}"
+          if gh release view "${TAG}" --repo "${REPO}" >/dev/null 2>&1; then
+            echo "Release ${TAG} 已存在，覆盖资产与说明"
+            gh release upload "${TAG}" --repo "${REPO}" --clobber dist/*.fpk
+            gh release edit "${TAG}" --repo "${REPO}" --notes-file /tmp/release-notes.md
+          else
+            gh release create "${TAG}" --repo "${REPO}" \
+              --title "DSH v${VER}" \
+              --notes-file /tmp/release-notes.md \
+              dist/*.fpk
+          fi
+
+  # -----------------------------------------------------------
+  # 4. 登记索引 + 清理旧版 + 提交推送
+  # -----------------------------------------------------------
+  index:
+    name: 更新索引
+    needs: [prepare, release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: 取回产物（算 sha256 用）
+        uses: actions/download-artifact@v4
+        with:
+          pattern: DSH_*
+          merge-multiple: true
+          path: dist
+
+      - name: 生成 Release 说明（写入索引的 changelog）
+        env:
+          VER: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          UPSTREAM_NOTES=$(node scripts/upstream-note.mjs \
+            --repo "${UPSTREAM_REPO}" --version "${VER}" --tags 'dsh-v{v},v{v},{v}' 2>/dev/null || true)
+          printf '%s\n' "${UPSTREAM_NOTES:-（上游未提供该版本的更新说明）}" > /tmp/dsh-changelog.md
+
+      - name: 登记索引并推送
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          VER: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          # 索引文件都是脚本生成的：并发冲突时以最新远端为基准重新生成再推
+          # （push-index.sh 会先 git reset --hard origin/main，再执行 --regen）
+          bash scripts/push-index.sh \
+            --message "chore: DSH ${VER} 由本仓库从上游构建，索引指向本源 [skip ci]" \
+            --regen "node scripts/finalize-dsh.mjs --version '${VER}' --dist dist --repo '${REPO}' --changelog-file /tmp/dsh-changelog.md; node scripts/prune-releases.mjs --slug dsh --keep-tag 'dsh-${VER}'; node scripts/update-index.mjs --repo '${REPO}'; mkdir -p build/dsh; printf '%s\n' '${VER}' > build/dsh/packed-upstream.txt"

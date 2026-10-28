@@ -31,7 +31,7 @@ const prevFnpack = await readJson(path.join(ROOT, 'fnpack.json'), { apps: {} });
 
 const allowlist = (await fs.readFile(path.join(ROOT, 'apps.allowlist.txt'), 'utf8').catch(() => ''))
   .split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
-const nativeSlugs = ['1panel', 'Router2API'];
+const nativeSlugs = ['1panel', 'dsh', 'Router2API'];
 const allSlugs = [...new Set([...nativeSlugs, ...allowlist])];
 
 const rows = [];
@@ -74,8 +74,8 @@ for (const slug of allSlugs) {
 }
 await writeJson(path.join(ROOT, 'fnpack.json'), fnpack);
 await fs.writeFile(path.join(ROOT, 'README.md'),
-  `# yoqie · 跟随源\n\n飞牛 fnOS 个人第三方应用源（个人维护，非 FnDepot 官方源）——由 GitHub Actions 跟随 [1Panel 官方](https://github.com/1Panel-dev/1Panel)、官方 Node.js 与 \`apps.allowlist.txt\` 名单中的应用市场应用自动打包更新。\n\n` +
+  `# yoqie · 跟随源\n\n飞牛 fnOS 个人第三方应用源（个人维护，非 FnDepot 官方源）——由 GitHub Actions 跟随 [1Panel 官方](https://github.com/1Panel-dev/1Panel)、[DSH 官方上游](https://github.com/deepseek-ai/deepseek-harness)、官方 Node.js 与 \`apps.allowlist.txt\` 名单中的应用市场应用自动打包更新。\n\n` +
   `- 源地址（添加到 FnDepot/AppCenter 第三方源）：\`https://github.com/${REPO}\` 或 \`https://raw.githubusercontent.com/${REPO}/main/fnpack.json\`\n` +
-  `- 跟随：1Panel 面板 v2、Router2API（.NET 10 模型路由宿主，amd64/arm64 双架构） + \`apps.allowlist.txt\` 名单中的应用市场应用\n` +
+  `- 跟随：1Panel 面板 v2、DSH（DeepSeek Harness，amd64/arm64 双架构）、Router2API（.NET 10 模型路由宿主，amd64/arm64 双架构） + \`apps.allowlist.txt\` 名单中的应用市场应用\n` +
   `- 同步频率：每天一次（可手动触发），有新版本时自动打包 FPK 并发布 Release；同一应用只保留最新版 Release。\n\n## 应用列表\n\n| 应用 | 描述 | 上游版本 |\n|------|------|----------|\n${rows.join('\n')}\n`);
 console.log('index updated, apps:', Object.keys(fnpack.apps).join(', '));
