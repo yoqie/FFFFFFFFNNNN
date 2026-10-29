@@ -12,25 +12,25 @@
   "is_docker": false,
   "service_port": "5242",
   "releases": {
-    "2.1.2": {
-      "version": "2.1.2",
-      "release_note": "## 更新内容\n\n### 🚀 Features | 新特性\n\n- 支持宿主与插件黑夜模式并完善模型列表和总览统计 (`7c93d22`)\n\n## Contracts 版本\n\n- C# 插件依赖：`Router.Contracts` NuGet 包。\n- 本次是否更新：未更新，继续使用 `2.0.0`。\n- 当前采用版本：`2.0.0`。\n\n## Docker 镜像\n\n- 镜像仓库：`hhhhzy/router2api`，镜像标签与本次 Release 版本一致。\n- 支持平台：`linux/amd64`、`linux/arm64`。\n\n## 升级说明\n\n- Docker Compose 部署可执行 `docker compose pull && docker compose up -d` 更新宿主。\n- 更新前请备份配置和持久化数据。\n- 宿主镜像不会自动更新已安装插件，请在管理后台单独检查插件版本及兼容性。",
-      "updated_at": "2026-10-24T16:44:01Z",
+    "2.1.3": {
+      "version": "2.1.3",
+      "release_note": "## 更新内容\n\n### 🐛 Bug Fixes | 修复\n\n- rebuild SqlSugar cache entries after missing Redis reads (`068155c`)\n\n### 📦 其他更新\n\n- 更新版本号 (`7099231`)\n\n## Contracts 版本\n\n- C# 插件依赖：`Router.Contracts` NuGet 包。\n- 本次是否更新：未更新，继续使用 `2.0.0`。\n- 当前采用版本：`2.0.0`。\n\n## Docker 镜像\n\n- 镜像仓库：`hhhhzy/router2api`，镜像标签与本次 Release 版本一致。\n- 支持平台：`linux/amd64`、`linux/arm64`。\n\n## 升级说明\n\n- Docker Compose 部署可执行 `docker compose pull && docker compose up -d` 更新宿主。\n- 更新前请备份配置和持久化数据。\n- 宿主镜像不会自动更新已安装插件，请在管理后台单独检查插件版本及兼容性。",
+      "updated_at": "2026-10-29T09:53:16Z",
       "packages": {
         "x86": {
-          "version": "2.1.2",
-          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/Router2API-2.1.2/Router2API_v2.1.2_amd64.fpk",
-          "sha256": "ce090fae2f5cb8356d150fc7c4ba92987a07b42589541f6f41adb1946f082135",
-          "size": 73646431
+          "version": "2.1.3",
+          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/Router2API-2.1.3/Router2API_v2.1.3_amd64.fpk",
+          "sha256": "98576f2c85602e5bbe4a0fa1a37737008b162813b628bba222efe94ef1e998ba",
+          "size": 73628141
         },
         "arm": {
-          "version": "2.1.2",
-          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/Router2API-2.1.2/Router2API_v2.1.2_arm64.fpk",
-          "sha256": "0816af9077bede848c806fa0b7a5bff7a17b2ccd047ac2f996b5c7797f53932f",
-          "size": 70901363
+          "version": "2.1.3",
+          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/Router2API-2.1.3/Router2API_v2.1.3_arm64.fpk",
+          "sha256": "dbe4d161700ad9c79ec8a0596f40a9c4ff87de12bbbb04f3cd4000b800ad42a9",
+          "size": 70902433
         }
       }
     }
   },
-  "updated_at": "2026-10-25T08:06:12.329Z"
+  "updated_at": "2026-10-29T09:53:28.226Z"
 }
