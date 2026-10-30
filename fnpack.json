@@ -9,7 +9,7 @@
   "apps": {
     "1panel": {
       "details_url": "apps/1panel.json",
-      "details_updated_at": "2026-10-23T03:56:54.716Z",
+      "details_updated_at": "2026-10-30T14:01:25.078Z",
       "display_name": "1Panel",
       "desc": "开源服务器运维管理面板，提供可视化的 Linux 服务器管理。",
       "platform": [

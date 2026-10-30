@@ -1,19 +1,19 @@
 {
   "app_name": "1panel",
   "releases": {
-    "2.4.1": {
-      "changelog": "[English](#en-v2.4.1) | [中文](#cn-v2.4.1)\r\n\r\n<h3 id=\"en-v2.4.1\">Bug Fixes</h3>\r\n\r\n* System: Upgraded Go to 1.27.3 to fix the crypto/x509 security vulnerability ([CVE-2026-111943](https://www.cve.org/CVERecord?id=CVE-2026-111943))\r\n\r\n<h3 id=\"cn-v2.4.1\">问题修复</h3>\r\n\r\n* 【系统】升级 Go 至 1.27.3，修复 crypto/x509 安全漏洞（[CVE-2026-111943](https://www.cve.org/CVERecord?id=CVE-2026-111943)）",
-      "updated_at": "2026-10-23T03:56:54.716Z",
+    "2.4.2": {
+      "changelog": "[English](#en-v2.4.2) | [中文](#cn-v2.4.2)\r\n\r\n<h3 id=\"en-v2.4.2\">Bug Fixes</h3>\r\n\r\n* System: Disabled MPTCP by default to mitigate a Linux kernel remote code execution vulnerability ([CVE-2026-98432](https://www.cve.org/CVERecord?id=CVE-2026-98432))\r\n\r\n<h3 id=\"cn-v2.4.2\">问题修复</h3>\r\n\r\n* 【系统】默认禁用 MPTCP，缓解 Linux 内核远程代码执行漏洞（[CVE-2026-98432](https://www.cve.org/CVERecord?id=CVE-2026-98432)）",
+      "updated_at": "2026-10-30T14:01:25.078Z",
       "packages": {
         "x86": {
-          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/1panel-2.4.1/1panel_2.4.1_x86.fpk",
-          "sha256": "646fdd46137e2c75b8db61fcc2c7766f56dd9c76797bdfdfaafb6eaa0c210169",
-          "size": 64388367
+          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/1panel-2.4.2/1panel_2.4.2_x86.fpk",
+          "sha256": "558c5d594032a324fef8f94634314d0d9bb0b26f0982fad8d812bd6337587a31",
+          "size": 64675593
         },
         "arm": {
-          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/1panel-2.4.1/1panel_2.4.1_arm.fpk",
-          "sha256": "210fe115f37b489b0f40bf9a2bc4140b60061a8451c36e2765ca57d92b218920",
-          "size": 59876499
+          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/1panel-2.4.2/1panel_2.4.2_arm.fpk",
+          "sha256": "5ca1e799b17df37b818c973650da15171b2e53b74f2d398433c2a8a5ae662d6c",
+          "size": 60092017
         }
       }
     }
