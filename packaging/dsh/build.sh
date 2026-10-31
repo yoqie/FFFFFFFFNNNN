@@ -2,13 +2,19 @@
 # =============================================================
 # build.sh —— 一条命令把上游 DeepSeek Harness（DSH）打成飞牛 fnOS 的 fpk
 #
-#   ./build.sh                          # 打包「上游最新 Release」版本，本机架构
+#   ./build.sh                          # 打包「上游最高版本」，本机架构
 #   ./build.sh --version 0.2.1-rc.4     # 指定版本
 #   ./build.sh --tag next               # 跟随 npm dist-tag（latest/next/alpha）
 #   ./build.sh --arch arm64             # 目标 arm64（见下方「架构」说明）
 #   ./build.sh --from ~/deepseek-harness # 用本地已 pnpm build 的上游源码打包
 #   ./build.sh --keep-stage             # 保留 stage/ 便于排查
-#   ./build.sh --print-version          # 只打印解析到的上游版本号（CI 用）
+#   ./build.sh --print-version          # 只打印解析到的版本号（CI 用）
+#
+# --version 与 --upstream-version 的区别（打包修复重发时用得上）：
+#   --upstream-version  从 npm 装哪个版本的 @deepseek-ai/dsh（= 上游 Release 版本）
+#   --version           写进 manifest、决定应用中心显示/比较的版本号
+# 默认两者相同；CI 会在"同一上游版本需要重发"时让 --version 比上游多一段
+# （0.2.2-alpha.2 → 0.2.2-alpha.2.1），否则用户永远收不到这次更新。
 #
 # 产物：dist/DSH_v<版本>_<arch>.fpk
 #
@@ -22,6 +28,7 @@ KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UPSTREAM_REPO="deepseek-ai/deepseek-harness"
 
 VERSION=""
+UPSTREAM_VERSION=""
 TAG=""
 ARCH=""
 OUT_DIR="${KIT_ROOT}/dist"
@@ -29,6 +36,7 @@ STAGE_DIR="${KIT_ROOT}/stage"
 FROM_DIR=""
 KEEP_STAGE=0
 PRINT_VERSION=0
+VERSION_EXPLICIT=0
 FNOS_NODE_RUNTIME="/var/apps/nodejs_v24/target/bin/node"
 
 usage() {
@@ -38,7 +46,8 @@ usage() {
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --version|-v) VERSION="${2:?}"; shift 2 ;;
+        --version|-v) VERSION="${2:?}"; VERSION_EXPLICIT=1; shift 2 ;;
+        --upstream-version) UPSTREAM_VERSION="${2:?}"; shift 2 ;;
         --tag|-t)     TAG="${2:?}"; shift 2 ;;
         --arch|-a)    ARCH="${2:?}"; shift 2 ;;
         --out|-o)     OUT_DIR="${2:?}"; shift 2 ;;
@@ -70,7 +79,7 @@ case "${ARCH}" in
 esac
 
 # ---------- 版本 ----------
-# 优先级：--version > --tag（npm dist-tag）> 上游 GitHub 最新非草稿 Release
+# 优先级：--version > --tag（npm dist-tag）> 上游 GitHub 最高版本
 # > npm dist-tag next > latest
 api() { curl -sfL --retry 2 -H "Accept: application/vnd.github+json" "$@"; }
 
@@ -81,7 +90,9 @@ elif [ -n "${TAG}" ]; then
     [ -n "${VERSION}" ] || die "npm 上找不到 dist-tag: ${TAG}"
     log "版本: ${VERSION}（npm dist-tag ${TAG}）"
 else
-    VERSION="$(api "https://api.github.com/repos/${UPSTREAM_REPO}/releases?per_page=20" \
+    # 取「版本号最高」而不是「发布得最晚」：上游会在老线上补丁（0.2.1-rc.5 晚于 0.2.2-alpha.2 发布），
+    # 按列表顺序取会把版本号退回去。比较方式与飞牛一致：只比数字段。
+    VERSION="$(api "https://api.github.com/repos/${UPSTREAM_REPO}/releases?per_page=100" \
         | node -e '
             let s = "";
             process.stdin.on("data", (c) => { s += c; })
@@ -89,9 +100,15 @@ else
                   let rels = [];
                   try { rels = JSON.parse(s); } catch { /* 限流或断网 */ }
                   if (!Array.isArray(rels)) return console.log("");
-                  const rel = rels.find((r) => !r.draft && String(r.tag_name || "").startsWith("dsh-v"));
-                  if (!rel) return console.log("");
-                  console.log(String(rel.tag_name).replace(/^dsh-v/, ""));
+                  const nums = (v) => String(v).split(/[^0-9]+/).filter(Boolean).map(Number);
+                  const cmp = (a, b) => {
+                      const A = nums(a), B = nums(b), n = Math.max(A.length, B.length);
+                      for (let i = 0; i < n; i++) { const d = (A[i] || 0) - (B[i] || 0); if (d) return d; }
+                      return 0;
+                  };
+                  const vs = rels.filter((r) => r && !r.draft && String(r.tag_name || "").startsWith("dsh-v"))
+                                 .map((r) => String(r.tag_name).replace(/^dsh-v/, ""));
+                  console.log(vs.reduce((a, b) => (cmp(b, a) > 0 ? b : a), ""));
               });
         ' 2>/dev/null || true)"
     if [ -z "${VERSION}" ]; then
@@ -99,9 +116,11 @@ else
         [ -n "${VERSION}" ] || VERSION="$(npm view @deepseek-ai/dsh version 2>/dev/null || true)"
     fi
     [ -n "${VERSION}" ] || die "无法确定上游版本，请用 --version 指定"
-    log "版本: ${VERSION}（跟随上游最新 Release）"
+    log "版本: ${VERSION}（跟随上游最高版本）"
 fi
 VERSION="${VERSION#v}"
+UPSTREAM_VERSION="${UPSTREAM_VERSION#v}"
+[ -n "${UPSTREAM_VERSION}" ] || UPSTREAM_VERSION="${VERSION}"
 
 # 只输出解析到的版本号就退出：供 CI 先算版本再分发到矩阵任务
 if [ "${PRINT_VERSION}" -eq 1 ]; then
@@ -130,9 +149,11 @@ if [ -n "${FROM_DIR}" ]; then
     # 源码模式的版本以 tgz 内 package.json 为准（可能高于最新 Release）
     PKG_VERSION="$(tar -xzOf "${TGZ_DIR}/${TGZ}" package/package.json \
         | node -p 'JSON.parse(require("fs").readFileSync(0,"utf8")).version')"
-    if [ "${VERSION}" != "${PKG_VERSION}" ]; then
-        log "版本以源码为准: ${VERSION} → ${PKG_VERSION}"
-        VERSION="${PKG_VERSION}"
+    if [ "${UPSTREAM_VERSION}" != "${PKG_VERSION}" ]; then
+        log "上游版本以源码为准: ${UPSTREAM_VERSION} → ${PKG_VERSION}"
+        UPSTREAM_VERSION="${PKG_VERSION}"
+        # 发布版本没被显式指定时跟着源码走；显式指定（重发加后缀）时保持不变
+        if [ "${VERSION_EXPLICIT}" -eq 0 ]; then VERSION="${PKG_VERSION}"; fi
     fi
     log "源码 tgz: ${DSH_SOURCE}"
 fi
@@ -149,9 +170,10 @@ else
 fi
 
 # ---------- 组装 ----------
-log "组装应用目录（${ARCH}）..."
+log "组装应用目录（${ARCH}）：发布版本 ${VERSION}，上游版本 ${UPSTREAM_VERSION}..."
 STAGE_DIR="${STAGE_DIR}" \
 DSH_VERSION="${VERSION}" \
+DSH_UPSTREAM_VERSION="${UPSTREAM_VERSION}" \
 TARGET_ARCH="${ARCH}" \
 NODE_ARCH="${NODE_ARCH}" \
 DSH_SOURCE="${DSH_SOURCE}" \

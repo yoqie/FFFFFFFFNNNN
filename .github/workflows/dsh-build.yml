@@ -4,12 +4,17 @@
 # 打包逻辑全在 packaging/dsh/ 里（build.sh + scripts/assemble.sh + appshell/），
 # 本工作流只负责「什么时候构建、在哪台机器构建、产物发到哪」：
 #
-#   prepare  解析上游最新版本（dsh-v* Release），定时任务下版本没变就跳过
+#   prepare  解析上游版本（取**版本号最高**的 dsh-v* Release），定时任务下版本没变就跳过
 #   build    矩阵：amd64 → ubuntu-24.04，arm64 → ubuntu-24.04-arm
 #            各自原生 npm 安装，原生模块与目标架构一致（免交叉编译坑）
-#   release  双架构产物汇总，发布 Release（tag: dsh-<版本>，同一版本覆盖更新）
+#   release  双架构产物汇总，发布 Release（tag: dsh-<发布版本>，同一版本覆盖更新）
 #   index    登记索引（apps/dsh.json / build/dsh/meta.json）→ 汇总 fnpack.json
 #            → 清理旧 Release → 提交推送
+#
+# 版本号有两个，别混：
+#   上游版本   从 npm 装 @deepseek-ai/dsh@<上游版本>；也是 build/dsh/packed-upstream.txt 的内容
+#   发布版本   写进 manifest / Release tag / 索引，由 scripts/next-version.mjs 保证**单调递增**
+#               （同一上游版本重发会变成 0.2.2-alpha.2.1，否则应用中心认为没有更新）
 #
 # 触发：每小时检查上游 / 手动 / packaging/dsh 有改动时
 # =============================================================
@@ -19,11 +24,11 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "指定上游版本（留空 = 上游最新 Release）"
+        description: "指定上游版本（留空 = 上游版本号最高的 Release）"
         required: false
         default: ""
       force:
-        description: "版本没变也强制重建（打包修复后重发用）"
+        description: "版本没变也强制重建（打包修复后重发用；发布版本会自动加 .k 后缀）"
         type: boolean
         required: false
         default: false
@@ -35,6 +40,9 @@ on:
     paths:
       - "packaging/dsh/**"
       - "scripts/finalize-dsh.mjs"
+      - "scripts/next-version.mjs"
+      - "scripts/upstream-release.mjs"
+      - "scripts/bump-high-water.mjs"
       - ".github/workflows/dsh-build.yml"
 
 permissions:
@@ -57,9 +65,14 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.ver.outputs.version }}
+      upstream: ${{ steps.ver.outputs.upstream }}
       skip: ${{ steps.ver.outputs.skip }}
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
 
       - name: 确定要构建的版本
         id: ver
@@ -70,37 +83,41 @@ jobs:
           EVENT: ${{ github.event_name }}
         run: |
           set -euo pipefail
-          VER="${INPUT_VERSION}"
-          if [ -z "${VER}" ]; then
-            # 上游最新一个非草稿 Release 的 dsh-v* tag（含预发布，与"跟随上游发布"一致）
-            VER=$(curl -sf -H "Authorization: Bearer ${GH_TOKEN}" \
-                "https://api.github.com/repos/${UPSTREAM_REPO}/releases?per_page=30" \
-              | node -e '
-                  let s = "";
-                  process.stdin.on("data", (c) => { s += c; })
-                    .on("end", () => {
-                        let rels = [];
-                        try { rels = JSON.parse(s); } catch { /* 限流或断网 */ }
-                        if (!Array.isArray(rels)) return console.log("");
-                        const rel = rels.find((r) => !r.draft && String(r.tag_name || "").startsWith("dsh-v"));
-                        console.log(rel ? String(rel.tag_name).replace(/^dsh-v/, "") : "");
-                    });
-                ')
+          UPSTREAM="${INPUT_VERSION}"
+          if [ -z "${UPSTREAM}" ]; then
+            # 取版本号**最高**的 dsh-v* Release，而不是列表里第一个：
+            # 上游会在老线上补丁（0.2.1-rc.5 发布得比 0.2.2-alpha.2 更晚），
+            # 按发布时间取会把源里的版本退回去 → 应用中心认为没有更新。
+            # stderr 里有"按版本最高/按发布时间最新"的对照日志，保留输出便于排查
+            UPSTREAM=$(node scripts/upstream-release.mjs \
+              --repo "${UPSTREAM_REPO}" --prefix 'dsh-v' || true)
           fi
-          if [ -z "${VER}" ]; then
+          if [ -z "${UPSTREAM}" ]; then
             echo "::error::无法确定上游版本（GitHub API 限流？）可用 workflow_dispatch 手动指定 version"
             exit 1
           fi
-          echo "上游版本: ${VER}"
+          UPSTREAM="${UPSTREAM#v}"
+          echo "上游版本: ${UPSTREAM}"
 
           # 定时任务：已打包过同一上游版本就跳过（手动触发 / force / push 永远构建）
+          # 注意 packed-upstream.txt 记的是**上游版本**，不是发布版本
           PACKED=$(cat build/dsh/packed-upstream.txt 2>/dev/null | tr -d '[:space:]' || true)
-          if [ "${EVENT}" = "schedule" ] && [ "${FORCE}" != "true" ] && [ "${PACKED}" = "${VER}" ]; then
-            echo "已打包过 ${VER}，跳过构建"
+          if [ "${EVENT}" = "schedule" ] && [ "${FORCE}" != "true" ] && [ "${PACKED}" = "${UPSTREAM}" ]; then
+            echo "已打包过 ${UPSTREAM}，跳过构建"
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
+
+          # 发布版本：跟随上游的同时保证单调递增（同一上游版本重发 → 0.2.2-alpha.2.1）
+          VER=$(node scripts/next-version.mjs \
+            --slug dsh --upstream-version "${UPSTREAM}" --keep-upstream)
+          if [ -z "${VER}" ]; then
+            echo "::error::计算发布版本失败"
+            exit 1
+          fi
+          echo "上游版本 ${UPSTREAM} → 发布版本 ${VER}"
+          echo "upstream=${UPSTREAM}" >> "$GITHUB_OUTPUT"
           echo "version=${VER}" >> "$GITHUB_OUTPUT"
 
   # -----------------------------------------------------------
@@ -134,17 +151,20 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.npm
-          key: npm-dsh-${{ matrix.arch }}-${{ needs.prepare.outputs.version }}
+          key: npm-dsh-${{ matrix.arch }}-${{ needs.prepare.outputs.upstream }}
           restore-keys: npm-dsh-${{ matrix.arch }}-
 
       - name: 打包 fpk
         env:
           DSH_VERSION: ${{ needs.prepare.outputs.version }}
+          DSH_UPSTREAM: ${{ needs.prepare.outputs.upstream }}
         run: |
           set -euo pipefail
           # 用 bash 显式调用：不依赖 checkout 出来的可执行位
+          # --version = 发布版本（写 manifest），--upstream-version = 从 npm 装哪个版本
           bash packaging/dsh/build.sh \
             --version "${DSH_VERSION}" \
+            --upstream-version "${DSH_UPSTREAM}" \
             --arch "${{ matrix.arch }}" \
             --out dist
 
@@ -206,12 +226,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VER: ${{ needs.prepare.outputs.version }}
+          UPSTREAM: ${{ needs.prepare.outputs.upstream }}
         run: |
           set -euo pipefail
           # 更新内容取自上游 deepseek-harness 对应 tag 的 Release 正文；取不到就回退一行提示
+          # 用**上游版本**去查 tag：发布版本可能带 .k 后缀（0.2.2-alpha.2.1），上游没有这个 tag
           UPSTREAM_NOTES=$(node scripts/upstream-note.mjs \
             --repo "${UPSTREAM_REPO}" \
-            --version "${VER}" \
+            --version "${UPSTREAM}" \
             --tags 'dsh-v{v},v{v},{v}' 2>/dev/null || true)
           [ -n "${UPSTREAM_NOTES}" ] || UPSTREAM_NOTES="（上游未提供该版本的更新说明）"
           # 打包层修复单独成节：它跟上游版本无关，用户升级后能直接看到
@@ -283,11 +305,11 @@ jobs:
 
       - name: 生成 Release 说明（写入索引的 changelog）
         env:
-          VER: ${{ needs.prepare.outputs.version }}
+          UPSTREAM: ${{ needs.prepare.outputs.upstream }}
         run: |
           set -euo pipefail
           UPSTREAM_NOTES=$(node scripts/upstream-note.mjs \
-            --repo "${UPSTREAM_REPO}" --version "${VER}" --tags 'dsh-v{v},v{v},{v}' 2>/dev/null || true)
+            --repo "${UPSTREAM_REPO}" --version "${UPSTREAM}" --tags 'dsh-v{v},v{v},{v}' 2>/dev/null || true)
           # 打包层修复也写进应用中心的更新说明（与 Release 说明同一节）
           PACKAGING_NOTES=$(cat packaging/dsh/CHANGELOG.md 2>/dev/null || true)
           {
@@ -302,10 +324,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           VER: ${{ needs.prepare.outputs.version }}
+          UPSTREAM: ${{ needs.prepare.outputs.upstream }}
         run: |
           set -euo pipefail
           # 索引文件都是脚本生成的：并发冲突时以最新远端为基准重新生成再推
           # （push-index.sh 会先 git reset --hard origin/main，再执行 --regen）
+          # packed-upstream.txt 记**上游版本**（定时任务据此判断"上游有没有新东西"）；
+          # highest-version.txt 记**发布版本高水位**（只增不减，防止版本号再被写退）。
           bash scripts/push-index.sh \
             --message "chore: DSH ${VER} 由本仓库从上游构建，索引指向本源 [skip ci]" \
-            --regen "node scripts/finalize-dsh.mjs --version '${VER}' --dist dist --repo '${REPO}' --changelog-file /tmp/dsh-changelog.md; node scripts/prune-releases.mjs --slug dsh --keep-tag 'dsh-${VER}' --prune-assets; node scripts/update-index.mjs --repo '${REPO}'; mkdir -p build/dsh; printf '%s\n' '${VER}' > build/dsh/packed-upstream.txt"
+            --regen "node scripts/finalize-dsh.mjs --version '${VER}' --dist dist --repo '${REPO}' --changelog-file /tmp/dsh-changelog.md; node scripts/prune-releases.mjs --slug dsh --keep-tag 'dsh-${VER}' --prune-assets; node scripts/update-index.mjs --repo '${REPO}'; mkdir -p build/dsh; printf '%s\n' '${UPSTREAM}' > build/dsh/packed-upstream.txt; node scripts/bump-high-water.mjs --slug dsh --version '${VER}'"

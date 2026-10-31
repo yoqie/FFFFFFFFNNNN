@@ -4,10 +4,11 @@
 #
 # 输入（环境变量）：
 #   STAGE_DIR    必填。输出目录（会被清空重建）
-#   DSH_VERSION  必填。写入 manifest 的版本号（= 上游版本）
+#   DSH_VERSION  必填。写入 manifest 的版本号（应用中心比较/显示用；重发时可能带 .k 后缀）
+#   DSH_UPSTREAM_VERSION 可选。从 npm 装哪个版本（默认同 DSH_VERSION）
 #   TARGET_ARCH  可选。amd64（默认）/ arm64
 #   NODE_ARCH    可选。x64（默认）/ arm64，npm 原生模块目录名
-#   DSH_SOURCE   可选。"npm"（默认，从 registry 装 @deepseek-ai/dsh@<版本>）
+#   DSH_SOURCE   可选。"npm"（默认，从 registry 装 @deepseek-ai/dsh@<上游版本>）
 #                或 "file:/abs/path/pkg.tgz"（从源码构建出的 tgz 装）
 #
 # 产出：$STAGE_DIR/DSH/ —— 可直接 cd 进去 fnpack build
@@ -17,6 +18,7 @@ set -euo pipefail
 KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STAGE_DIR="${STAGE_DIR:?请设置 STAGE_DIR}"
 DSH_VERSION="${DSH_VERSION:?请设置 DSH_VERSION}"
+DSH_UPSTREAM_VERSION="${DSH_UPSTREAM_VERSION:-${DSH_VERSION}}"
 TARGET_ARCH="${TARGET_ARCH:-amd64}"
 NODE_ARCH="${NODE_ARCH:-x64}"
 DSH_SOURCE="${DSH_SOURCE:-npm}"
@@ -56,8 +58,8 @@ echo "==> [4/6] 安装 DSH 与运行时依赖"
 # pnpm 必须随包：dsh 的插件安装器直接 execa("pnpm")，服务端 PATH 里没有它。
 DEP_SPEC="${DSH_SOURCE}"
 if [ "${DEP_SPEC}" = "npm" ]; then
-    DEP_SPEC="${DSH_VERSION}"
-    say "来源: registry @deepseek-ai/dsh@${DSH_VERSION}"
+    DEP_SPEC="${DSH_UPSTREAM_VERSION}"
+    say "来源: registry @deepseek-ai/dsh@${DSH_UPSTREAM_VERSION}（发布版本 ${DSH_VERSION}）"
 else
     [ -f "${DEP_SPEC#file:}" ] || die "DSH_SOURCE 指向的文件不存在: ${DEP_SPEC}"
     say "来源: 本地 tgz ${DEP_SPEC}"
