@@ -33,7 +33,7 @@
     },
     "dsh": {
       "details_url": "apps/dsh.json",
-      "details_updated_at": "2026-10-30T07:06:19.836Z",
+      "details_updated_at": "2026-10-31T02:44:24.504Z",
       "display_name": "DSH",
       "desc": "DeepSeek Harness（DSH）飞牛NAS版：跟随上游 deepseek-harness 自动构建，amd64/arm64 双架构原生安装包，飞牛桌面一键打开。",
       "platform": [
