@@ -1,27 +1,6 @@
 {
   "app_name": "dsh",
-  "releases": {
-    "0.2.2-alpha.2.2": {
-      "version": "0.2.2-alpha.2.2",
-      "changelog": "> 本次同步的上游版本：`dsh-v0.2.1-rc.5`　|　本仓库发布版本：`0.2.2-alpha.2.2`\n\n## 飞牛打包修复（本仓库）\n\n- **跟紧官方发布节奏（按发布时间最新跟随）**：上游同时维护两条线（`0.2.1-rc.N` 稳定线与 `0.2.2-alpha.N` 预览线），并会把稳定线的补丁作为**新发布**推出来 —— `0.2.1-rc.5`（10-30）就比 `0.2.2-alpha.2`（10-28）更晚，npm 的 `latest`/`next` 都指向 rc.5。以前按「版本号看起来最高」取版本，会一直停在预览线上、错过官方当前在推的稳定版；现在按**发布时间最新**跟随，官方发哪个就跟哪个。\n  - 版本号不会因此倒退：`scripts/next-version.mjs` 保证发布版本**单调递增**。上游数字段低于历史高水位时，顺着高水位末段 +1（`0.2.2-alpha.2.1` → `0.2.2-alpha.2.2`）；同一上游版本重发也是 +1（`0.2.2-alpha.2` → `0.2.2-alpha.2.1`）。两者都用上游不会发出的号，永不与上游将来版本撞车。\n  - `build/dsh/highest-version.txt` 是高水位，只增不减 —— 即使旧 Release 被清理、索引被写坏，也不会再发布一个更低的版本（这正是之前「应用中心不提示更新、也不显示更新内容」的根因：索引被从 `0.2.2-alpha.2` 写回 `0.2.1-rc.5`，飞牛只比数字段 `0.2.1.5 < 0.2.2.2`，判定\"没有更新\"）。\n  - 更新说明顶部会标注本次实际同步的上游版本，与版本号后缀区分开，避免「版本号看着像 alpha 线、内容其实是稳定线」的困惑。\n- **修复「点开 DSH 卡片打不开网页」**：`dsh web` 长时间运行会堆内存耗尽退出（日志 `Reached heap limit`，约 2 GB），而 gate 仍在 3080 上把浏览器 302 到已经没人监听的 3081，浏览器报「无法访问此网站」。\n  - 新增看门狗：每 10 秒检查 dsh 进程，退出即按同样参数重启并刷新启动令牌（gate 每次请求重读 `launch-token`，不必重启 gate）；连续失败退避到最多 5 分钟。`stop` 时先杀看门狗，避免刚停掉又被拉起。\n  - gate 在换 cookie 之前探测 dsh 端口，不通就返回 503「DSH 正在重启」，不再把浏览器送到死端口。\n- **修复重启后必定 401**：`wait_token` 原先从整个日志 grep 启动令牌，而日志是跨重启追加的 —— 重启后 dsh 还没打印新令牌，第一轮循环就命中上一轮的旧令牌。改为 spawn 前记录日志字节偏移，只扫描本次启动之后新增的部分。\n- **修复「安装包大小校验失败」**：同一版本的 Release 资产以前是**原地覆盖**，而 fpk 每次构建的字节都不同，于是索引里记的大小/sha256 与线上文件对不上，飞牛安装时直接报 `expected=… actual=…`。现在产物名带内容指纹（sha256 前 12 位，如 `DSH_v0.2.2-alpha.2_amd64_8c0f1e407cba.fpk`），下载地址与内容绑定、永不改变；索引切换是原子提交，旧资产保留 1 小时后自动清理。\n- **支持在 NAS 本机上访问**：dsh 只绑局域网 IP，`127.0.0.1` 上原本没人监听，在 NAS 本机开浏览器打不开。gate 现在额外监听 `127.0.0.1`，用 `http://127.0.0.1:3080` 即可（`localhost` 可能解析到 `::1`，不要用）。\n- **地址栏不再跳到 3081（gate 改为反向代理）**：以前从 3080 进入会被 302 甩到 `:3081`，地址栏变端口、书签和反向代理都不好用。现在 3080 直接反向代理 dsh：首次进入时用启动令牌在服务端换 cookie、303 回原地址，之后所有请求（含 WebSocket）原样转发，地址栏始终停在 3080。转发时把 `Host`/`Origin` 改写成 dsh 的 authority，否则它的会话 cookie 与 `/api` 围栏会一律拒绝。\n- **日志只留异常**：gate 只在启动、监听失败、令牌兑换失败时记一行，不再逐条记录访问。\n\n## 更新内容（同步自上游）\n\n[中文](#cn-v0.2.1-rc.5-community) | [English](#en-v0.2.1-rc.5-community)\n\n<h3 id=\"cn-v0.2.1-rc.5-community\">体验优化</h3>\n\n- 优化对话中思考内容的展示效果。 @LegGasai\n\n<h3 id=\"en-v0.2.1-rc.5-community\">Improvements</h3>\n\n- Improve how thinking content is displayed in conversations. by @LegGasai\n\nFull Changelog: [dsh-v0.2.1-rc.4...dsh-v0.2.1-rc.5](https://github.com/deepseek-ai/deepseek-harness/compare/dsh-v0.2.1-rc.4...dsh-v0.2.1-rc.5)",
-      "release_note": "DSH v0.2.2-alpha.2.2 飞牛 fnOS 自动构建（amd64/arm64）。",
-      "updated_at": "2026-11-01T02:19:45.898Z",
-      "packages": {
-        "x86": {
-          "version": "0.2.2-alpha.2.2",
-          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.2-alpha.2.2/DSH_v0.2.2-alpha.2.2_amd64_3ec159870de7.fpk",
-          "sha256": "3ec159870de7025cdca84bdd583e188acd9fd8f2c73e92a5066d5379ef421970",
-          "size": 131114873
-        },
-        "arm": {
-          "version": "0.2.2-alpha.2.2",
-          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.2-alpha.2.2/DSH_v0.2.2-alpha.2.2_arm64_dc6f320aba5c.fpk",
-          "sha256": "dc6f320aba5c2d167350991139fbc3118b870fa9f385cdbbfe10ee2c36f4d256",
-          "size": 134048523
-        }
-      }
-    }
-  },
+  "releases": {},
   "display_name": "DSH",
   "desc": "DeepSeek Harness（DSH）飞牛NAS版：跟随上游 deepseek-harness 自动构建，amd64/arm64 双架构原生安装包，飞牛桌面一键打开。",
   "platform": [
