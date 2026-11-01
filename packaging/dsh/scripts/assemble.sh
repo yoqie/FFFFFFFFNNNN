@@ -47,10 +47,10 @@ cp "${KIT}/appshell/ICON.PNG" "${KIT}/appshell/ICON_256.PNG" "${APP}/"
 cp -r "${KIT}/appshell/ui" "${CONTENT}/"
 say "manifest / cmd / config / wizard / ui / 图标"
 
-echo "==> [3/6] 入口跳转器与启动资源"
-mkdir -p "${CONTENT}/gate"
-cp "${KIT}/gate/gate.js" "${CONTENT}/gate/gate.js"
-say "gate/gate.js（把浏览器 302 到带启动令牌的官方地址）"
+echo "==> [3/6] 反向代理启动器"
+mkdir -p "${CONTENT}/runner"
+cp "${KIT}/runner/runner.js" "${CONTENT}/runner/runner.js"
+say "runner/runner.js（唯一对外端口 → 回环 dsh web，代理 HTTP/WebSocket 并自签会话）"
 
 echo "==> [4/6] 安装 DSH 与运行时依赖"
 # Node 不自带：manifest 声明 install_dep_apps=nodejs_v24，由应用中心提供
@@ -232,7 +232,7 @@ chmod 755 "${APP}/cmd/"* 2>/dev/null || true
 
 echo "==> [6/6] 校验"
 [ -f "${CONTENT}/node_modules/@deepseek-ai/dsh/lib/bin.js" ] || die "dsh 入口缺失"
-[ -f "${CONTENT}/gate/gate.js" ] || die "gate.js 缺失"
+[ -f "${CONTENT}/runner/runner.js" ] || die "runner.js 缺失"
 [ -x "${CONTENT}/node_modules/.bin/pnpm" ] || die "缺少可执行的 pnpm（插件安装会不可用）"
 # 转发脚本必须真能跑：文件存在但 require 路径错，装完就 MODULE_NOT_FOUND
 "${CONTENT}/node_modules/.bin/pnpm" --version >/dev/null 2>&1 \
