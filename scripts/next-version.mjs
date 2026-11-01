@@ -59,6 +59,21 @@ function cmp(a, b) {
 }
 // 上游版本 → 纯数字版本
 const base = nums(upstream).join('.');
+
+// 只比 base 自身位数（不补 0）：>= 0 表示"往后补段有可能超过 highest"。
+// 例：base 0.2.1.5 vs highest 0.2.2-alpha.2.1 → 第 3 位 1 < 2，补多少段都超不过。
+const prefixCmp = (a, b) => {
+  const A = nums(a), B = nums(b);
+  for (let i = 0; i < Math.min(A.length, B.length); i++) {
+    if (A[i] !== B[i]) return A[i] - B[i];
+  }
+  return 0;
+};
+// 高水位末段 +1：0.2.2-alpha.2.1 → 0.2.2-alpha.2.2
+const bumpTail = (v) => {
+  const m = String(v).match(/^(.*?)(\d+)(\D*)$/);
+  return m ? `${m[1]}${Number(m[2]) + 1}${m[3]}` : `${v}.1`;
+};
 if (!base) {
   console.error(`无法从上游版本得到数字段: ${upstream}`);
   process.exit(1);
@@ -107,10 +122,17 @@ if (keepUpstream) {
   // 保留上游字符串：能直接用上游版本就用，需要递增时在上游字符串后补 .k
   if (!highest || cmp(base, highest) > 0) {
     version = upstream;
-  } else {
+  } else if (prefixCmp(base, highest) >= 0) {
+    // 前面的数字段都不低于高水位 → 补 .k 一定能在有限步内超过它
     let k = 1;
     while (cmp(`${base}.${k}`, highest) <= 0) k++;
     version = `${upstream}.${k}`;
+  } else {
+    // 上游这条线的数字段整体低于历史高水位（例如官方把老线 0.2.1-rc.x 标成 latest，
+    // 而源里已经发过 0.2.2-alpha.x）→ 补段永远超不过，只能顺着高水位末段 +1。
+    // 用高水位形态 + 末段可以从不出现在上游的号（上游不发 .k），永不与将来版本撞车。
+    version = bumpTail(highest);
+    console.error(`上游 ${upstream} 的数字段低于历史高水位 ${highest}，改为在其末段 +1`);
   }
 } else {
   version = base;
@@ -124,10 +146,13 @@ if (keepUpstream) {
       const parts = base.split('.').map(Number);
       parts[parts.length - 1] += 1;
       version = parts.join('.');
-    } else {
+    } else if (prefixCmp(base, highest) >= 0) {
       let k = 1;
       while (cmp(`${base}.${k}`, highest) <= 0) k++;
       version = `${base}.${k}`;
+    } else {
+      // 同 keepUpstream 的兜底：上游数字段整体低于高水位，补段追不上
+      version = bumpTail(highest);
     }
   }
 }

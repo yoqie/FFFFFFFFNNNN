@@ -2,7 +2,7 @@
 # =============================================================
 # build.sh —— 一条命令把上游 DeepSeek Harness（DSH）打成飞牛 fnOS 的 fpk
 #
-#   ./build.sh                          # 打包「上游最高版本」，本机架构
+#   ./build.sh                          # 打包「上游最新发布」，本机架构
 #   ./build.sh --version 0.2.1-rc.4     # 指定版本
 #   ./build.sh --tag next               # 跟随 npm dist-tag（latest/next/alpha）
 #   ./build.sh --arch arm64             # 目标 arm64（见下方「架构」说明）
@@ -13,8 +13,8 @@
 # --version 与 --upstream-version 的区别（打包修复重发时用得上）：
 #   --upstream-version  从 npm 装哪个版本的 @deepseek-ai/dsh（= 上游 Release 版本）
 #   --version           写进 manifest、决定应用中心显示/比较的版本号
-# 默认两者相同；CI 会在"同一上游版本需要重发"时让 --version 比上游多一段
-# （0.2.2-alpha.2 → 0.2.2-alpha.2.1），否则用户永远收不到这次更新。
+# 默认两者相同；CI 用 scripts/next-version.mjs 算 --version，保证应用中心能识别为
+# "有更新"（同一上游版本重发 → 0.2.2-alpha.2.1；上游把老线当最新发布 → 顺着高水位末段 +1）。
 #
 # 产物：dist/DSH_v<版本>_<arch>.fpk
 #
@@ -79,7 +79,7 @@ case "${ARCH}" in
 esac
 
 # ---------- 版本 ----------
-# 优先级：--version > --tag（npm dist-tag）> 上游 GitHub 最高版本
+# 优先级：--version > --tag（npm dist-tag）> 上游 GitHub 最新发布
 # > npm dist-tag next > latest
 api() { curl -sfL --retry 2 -H "Accept: application/vnd.github+json" "$@"; }
 
@@ -90,8 +90,9 @@ elif [ -n "${TAG}" ]; then
     [ -n "${VERSION}" ] || die "npm 上找不到 dist-tag: ${TAG}"
     log "版本: ${VERSION}（npm dist-tag ${TAG}）"
 else
-    # 取「版本号最高」而不是「发布得最晚」：上游会在老线上补丁（0.2.1-rc.5 晚于 0.2.2-alpha.2 发布），
-    # 按列表顺序取会把版本号退回去。比较方式与飞牛一致：只比数字段。
+    # 取「发布时间最新」的 Release：那是官方当前在推的线（老线补丁也会作为新发布推出来，
+    # 例如 0.2.1-rc.5 比 0.2.2-alpha.2 晚发布，npm 的 latest/next 都指向它）。
+    # 版本号倒退的风险由 scripts/next-version.mjs 兜住（CI 用它算发布版本）。
     VERSION="$(api "https://api.github.com/repos/${UPSTREAM_REPO}/releases?per_page=100" \
         | node -e '
             let s = "";
@@ -100,15 +101,9 @@ else
                   let rels = [];
                   try { rels = JSON.parse(s); } catch { /* 限流或断网 */ }
                   if (!Array.isArray(rels)) return console.log("");
-                  const nums = (v) => String(v).split(/[^0-9]+/).filter(Boolean).map(Number);
-                  const cmp = (a, b) => {
-                      const A = nums(a), B = nums(b), n = Math.max(A.length, B.length);
-                      for (let i = 0; i < n; i++) { const d = (A[i] || 0) - (B[i] || 0); if (d) return d; }
-                      return 0;
-                  };
-                  const vs = rels.filter((r) => r && !r.draft && String(r.tag_name || "").startsWith("dsh-v"))
-                                 .map((r) => String(r.tag_name).replace(/^dsh-v/, ""));
-                  console.log(vs.reduce((a, b) => (cmp(b, a) > 0 ? b : a), ""));
+                  // GitHub 返回顺序即 published_at 倒序，第一个就是发布得最新的
+                  const rel = rels.find((r) => r && !r.draft && String(r.tag_name || "").startsWith("dsh-v"));
+                  console.log(rel ? String(rel.tag_name).replace(/^dsh-v/, "") : "");
               });
         ' 2>/dev/null || true)"
     if [ -z "${VERSION}" ]; then
@@ -116,7 +111,7 @@ else
         [ -n "${VERSION}" ] || VERSION="$(npm view @deepseek-ai/dsh version 2>/dev/null || true)"
     fi
     [ -n "${VERSION}" ] || die "无法确定上游版本，请用 --version 指定"
-    log "版本: ${VERSION}（跟随上游最高版本）"
+    log "版本: ${VERSION}（跟随上游最新发布）"
 fi
 VERSION="${VERSION#v}"
 UPSTREAM_VERSION="${UPSTREAM_VERSION#v}"

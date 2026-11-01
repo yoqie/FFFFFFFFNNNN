@@ -4,7 +4,8 @@
 # 打包逻辑全在 packaging/dsh/ 里（build.sh + scripts/assemble.sh + appshell/），
 # 本工作流只负责「什么时候构建、在哪台机器构建、产物发到哪」：
 #
-#   prepare  解析上游版本（取**版本号最高**的 dsh-v* Release），定时任务下版本没变就跳过
+#   prepare  解析上游版本（取**发布时间最新**的 dsh-v* Release = 官方当前在推的线），
+#            定时任务下版本没变就跳过
 #   build    矩阵：amd64 → ubuntu-24.04，arm64 → ubuntu-24.04-arm
 #            各自原生 npm 安装，原生模块与目标架构一致（免交叉编译坑）
 #   release  双架构产物汇总，发布 Release（tag: dsh-<发布版本>，同一版本覆盖更新）
@@ -24,7 +25,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "指定上游版本（留空 = 上游版本号最高的 Release）"
+        description: "指定上游版本（留空 = 上游最新发布的 Release）"
         required: false
         default: ""
       force:
@@ -85,12 +86,12 @@ jobs:
           set -euo pipefail
           UPSTREAM="${INPUT_VERSION}"
           if [ -z "${UPSTREAM}" ]; then
-            # 取版本号**最高**的 dsh-v* Release，而不是列表里第一个：
-            # 上游会在老线上补丁（0.2.1-rc.5 发布得比 0.2.2-alpha.2 更晚），
-            # 按发布时间取会把源里的版本退回去 → 应用中心认为没有更新。
-            # stderr 里有"按版本最高/按发布时间最新"的对照日志，保留输出便于排查
+            # 取**发布时间最新**的 dsh-v* Release：那是官方当前在推的线（上游会把老线
+            # 补丁作为新发布推出来，例如 0.2.1-rc.5 晚于 0.2.2-alpha.2，npm latest/next 都指向它）。
+            # 版本号倒退的风险不在这里解决，交给下面的 next-version.mjs（高水位 + 单调递增）。
+            # stderr 有"发布时间最新 / 版本最高"的对照日志，保留输出便于排查
             UPSTREAM=$(node scripts/upstream-release.mjs \
-              --repo "${UPSTREAM_REPO}" --prefix 'dsh-v' || true)
+              --repo "${UPSTREAM_REPO}" --prefix 'dsh-v' --order time || true)
           fi
           if [ -z "${UPSTREAM}" ]; then
             echo "::error::无法确定上游版本（GitHub API 限流？）可用 workflow_dispatch 手动指定 version"
@@ -242,9 +243,13 @@ jobs:
           cat > /tmp/release-notes.md <<NOTES
           DeepSeek Harness v${VER} 飞牛 fnOS 版（GitHub Actions 双架构原生构建）。
 
-          **按 NAS 架构下载**：
-          - x86_64（AMD/Intel，绝大多数 NAS 与虚拟机）→ \`DSH_v${VER}_amd64.fpk\`
-          - ARM64 → \`DSH_v${VER}_arm64.fpk\`
+          > 本次同步的**上游版本**：\`dsh-v${UPSTREAM}\`　|　本仓库**发布版本**：\`${VER}\`
+          > 两者可能不同：发布版本必须单调递增，应用中心才会认为"有更新"；
+          > 上游把老线补丁当新发布推出来时，这里的后缀会往上加。
+
+          **按 NAS 架构下载**（文件名带内容指纹，下载地址与内容绑定）：
+          - x86_64（AMD/Intel，绝大多数 NAS 与虚拟机）→ \`DSH_v${VER}_amd64_*.fpk\`
+          - ARM64 → \`DSH_v${VER}_arm64_*.fpk\`
 
           ## 飞牛打包修复（本仓库）
 
@@ -306,6 +311,7 @@ jobs:
       - name: 生成 Release 说明（写入索引的 changelog）
         env:
           UPSTREAM: ${{ needs.prepare.outputs.upstream }}
+          VER: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
           UPSTREAM_NOTES=$(node scripts/upstream-note.mjs \
@@ -313,6 +319,9 @@ jobs:
           # 打包层修复也写进应用中心的更新说明（与 Release 说明同一节）
           PACKAGING_NOTES=$(cat packaging/dsh/CHANGELOG.md 2>/dev/null || true)
           {
+            # 先写"这次到底同步了上游哪个版本"：发布版本号可能带 .k 后缀，
+            # 光看版本号会误以为还在原来的线上
+            printf '> 本次同步的上游版本：`dsh-v%s`　|　本仓库发布版本：`%s`\n\n' "${UPSTREAM}" "${VER}"
             if [ -n "${PACKAGING_NOTES}" ]; then
               printf '## 飞牛打包修复（本仓库）\n\n%s\n\n' "${PACKAGING_NOTES}"
             fi
