@@ -150,6 +150,22 @@ const HOP_BY_HOP = new Set([
     'te', 'trailer', 'transfer-encoding', 'upgrade',
 ]);
 
+/**
+ * 丢掉浏览器带来的 dsh 会话 cookie。
+ *
+ * dsh 的 cookieValue() 只取「同名 cookie 的第一个」，而运行器签发的那份是追加在
+ * 后面的。浏览器里若残留一份旧的 dsh-auth-*（以前直连 3081、或上一版转发过
+ * Set-Cookie 时留下的），它就会遮蔽运行器签发的新 cookie，dsh 一律 401，
+ * 页面只剩一句「dsh web authentication required」。
+ */
+function stripSessionCookies(cookieHeader) {
+    return cookieHeader
+        .split(';')
+        .map((segment) => segment.trim())
+        .filter((segment) => segment !== '' && !segment.startsWith('dsh-auth-'))
+        .join('; ');
+}
+
 function upstreamHeaders(req, injectCookie) {
     const headers = {};
     for (const [name, value] of Object.entries(req.headers)) {
@@ -157,12 +173,14 @@ function upstreamHeaders(req, injectCookie) {
         // dsh 的围栏要求 Origin 与 Host 同源；浏览器看到的是代理地址，
         // 与回环 Host 不同源，因此直接剥掉（围栏对「无 Origin」放行）。
         if (name === 'origin' || name === 'referer') continue;
+        if (name === 'cookie') continue;
         headers[name] = value;
     }
     headers.host = UPSTREAM_AUTHORITY;
     const cookie = injectCookie ? authCookie() : '';
-    const incoming = req.headers.cookie || '';
+    const incoming = stripSessionCookies(req.headers.cookie || '');
     if (cookie) headers.cookie = incoming ? `${incoming}; ${cookie}` : cookie;
+    else if (incoming) headers.cookie = incoming;
     if (String(req.headers.accept || '').includes('text/html')) delete headers['accept-encoding'];
     return headers;
 }
@@ -209,9 +227,8 @@ function proxyRequest(req, res, retried) {
             headers: upstreamHeaders(req, true),
         },
         (upstreamRes) => {
-            // 自签 cookie 被上游拒绝时回退官方令牌（只对导航请求做一次）
-            const isDocument = req.method === 'GET' && String(req.headers.accept || '').includes('text/html');
-            if (upstreamRes.statusCode === 401 && isDocument && !retried) {
+            // 自签 cookie 被上游拒绝时回退官方令牌（GET 幂等，只重试一次）
+            if (upstreamRes.statusCode === 401 && req.method === 'GET' && !retried) {
                 upstreamRes.resume();
                 mintOfficialCookie(req).then((ok) => {
                     if (ok) proxyRequest(req, res, true);
@@ -267,7 +284,7 @@ function proxyUpgrade(req, socket, head) {
             lines.push(`${name}: ${req.rawHeaders[index + 1]}`);
         }
         lines.push(`Host: ${UPSTREAM_AUTHORITY}`);
-        const cookie = authCookie();
+        const cookie = [stripSessionCookies(req.headers.cookie || ''), authCookie()].filter(Boolean).join('; ');
         if (cookie) lines.push(`Cookie: ${cookie}`);
         upstream.write(`${lines.join('\r\n')}\r\n\r\n`);
         if (head && head.length > 0) upstream.write(head);
