@@ -36,7 +36,12 @@ const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 && argv[i + 1] 
 const has = (k) => argv.includes(k);
 
 const SLUG = opt('--slug', '');
-const KEEP = Math.max(1, Number(opt('--keep', '1')) || 1);
+// 默认保留 2 个（最新 + 上一个），不再只留最新：
+// FnDepot 判断「已装应用来自哪个源」的方式，是在源索引里找与已装版本对应的条目。
+// 只留最新版时，用户机器上「落后一个版本」的安装会在源里找不到对应条目，
+// FnDepot 就把它记成 installedSourceType=manual（不属于任何源），于是永远不比较版本、
+// 也就永远不提示更新（1Panel 上实际踩到过）。保留上一版后，落后一版的安装仍能被归属。
+const KEEP = Math.max(1, Number(opt('--keep', '2')) || 2);
 const KEEP_TAG = opt('--keep-tag', '');
 const REPO = opt('--repo', process.env.REPO || 'yoqie/FFFFFFFFNNNN');
 const DRY = has('--dry-run');
