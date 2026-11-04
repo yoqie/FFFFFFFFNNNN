@@ -251,13 +251,13 @@ jobs:
           - x86_64（AMD/Intel，绝大多数 NAS 与虚拟机）→ \`DSH_v${VER}_amd64_*.fpk\`
           - ARM64 → \`DSH_v${VER}_arm64_*.fpk\`
 
-          ## 飞牛打包修复（本仓库）
-
-          ${PACKAGING_NOTES}
-
           ## 更新内容（同步自上游）
 
           ${UPSTREAM_NOTES}
+
+          ## 飞牛打包修复（本仓库）
+
+          ${PACKAGING_NOTES}
 
           **安装/升级**：
           1. 下载与 NAS 架构对应的 fpk
@@ -312,20 +312,18 @@ jobs:
         env:
           UPSTREAM: ${{ needs.prepare.outputs.upstream }}
           VER: ${{ needs.prepare.outputs.version }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           UPSTREAM_NOTES=$(node scripts/upstream-note.mjs \
             --repo "${UPSTREAM_REPO}" --version "${UPSTREAM}" --tags 'dsh-v{v},v{v},{v}' 2>/dev/null || true)
-          # 打包层修复也写进应用中心的更新说明（与 Release 说明同一节）
-          PACKAGING_NOTES=$(cat packaging/dsh/CHANGELOG.md 2>/dev/null || true)
           {
-            # 先写"这次到底同步了上游哪个版本"：发布版本号可能带 .k 后缀，
-            # 光看版本号会误以为还在原来的线上
-            printf '> 本次同步的上游版本：`dsh-v%s`　|　本仓库发布版本：`%s`\n\n' "${UPSTREAM}" "${VER}"
-            if [ -n "${PACKAGING_NOTES}" ]; then
-              printf '## 飞牛打包修复（本仓库）\n\n%s\n\n' "${PACKAGING_NOTES}"
-            fi
-            printf '## 更新内容（同步自上游）\n\n%s\n' "${UPSTREAM_NOTES:-（上游未提供该版本的更新说明）}"
+            # 应用中心展示的「更新内容」= 上游这个版本自己写的东西。
+            # 本仓库的飞牛打包层改动与上游版本无关，塞进来会把上游更新内容淹掉，
+            # 只留一行指到 Release 说明。
+            printf '> 上游版本 `dsh-v%s`　|　本仓库发布版本 `%s`\n\n' "${UPSTREAM}" "${VER}"
+            printf '%s\n' "${UPSTREAM_NOTES:-（上游未提供该版本的更新说明）}"
+            printf '\n\n---\n\n飞牛打包层改动（与上游版本无关）见 [Release 说明](https://github.com/%s/releases/tag/dsh-%s)。\n' "${REPO}" "${VER}"
           } > /tmp/dsh-changelog.md
 
       - name: 登记索引并推送
