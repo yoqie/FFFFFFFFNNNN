@@ -41,7 +41,7 @@ const SLUG = opt('--slug', '');
 // 只留最新版时，用户机器上「落后一个版本」的安装会在源里找不到对应条目，
 // FnDepot 就把它记成 installedSourceType=manual（不属于任何源），于是永远不比较版本、
 // 也就永远不提示更新（1Panel 上实际踩到过）。保留上一版后，落后一版的安装仍能被归属。
-const KEEP = Math.max(1, Number(opt('--keep', '2')) || 2);
+const KEEP = Math.max(1, Number(opt('--keep', '1')) || 1);
 const KEEP_TAG = opt('--keep-tag', '');
 const REPO = opt('--repo', process.env.REPO || 'yoqie/FFFFFFFFNNNN');
 const DRY = has('--dry-run');
