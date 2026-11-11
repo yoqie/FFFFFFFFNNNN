@@ -15,3 +15,4 @@
 - **支持在 NAS 本机上访问**：dsh 只绑局域网 IP，`127.0.0.1` 上原本没人监听，在 NAS 本机开浏览器打不开。gate 现在额外监听 `127.0.0.1`，用 `http://127.0.0.1:3080` 即可（`localhost` 可能解析到 `::1`，不要用）。
 - **地址栏不再跳到 3081（gate 改为反向代理）**：以前从 3080 进入会被 302 甩到 `:3081`，地址栏变端口、书签和反向代理都不好用。现在 3080 直接反向代理 dsh：首次进入时用启动令牌在服务端换 cookie、303 回原地址，之后所有请求（含 WebSocket）原样转发，地址栏始终停在 3080。转发时把 `Host`/`Origin` 改写成 dsh 的 authority，否则它的会话 cookie 与 `/api` 围栏会一律拒绝。
 - **日志只留异常**：gate 只在启动、监听失败、令牌兑换失败时记一行，不再逐条记录访问。
+- **修复「上传图片/文件失败」**：dsh 0.2.2 起，附件落盘前会把 `<DSH_HOME>` 的每一级祖先目录都打开 fsync 一遍（`dsh-attachment-local` 的 `ensureDurableHome`）。飞牛上 `/vol1` 与 `/vol1/@appshare` 对应用用户不可读（只对应用自己的目录放行），这一步直接 `EACCES`，于是上传报 `failed to store file upload: Error: EACCES: permission denied, open '/vol1/@appshare'`。祖先目录的 durability（崩溃后目录项是否已落盘）不是应用能负责的，打包时对该步骤放宽 `EACCES/EPERM/EROFS`，其余错误照旧抛出。

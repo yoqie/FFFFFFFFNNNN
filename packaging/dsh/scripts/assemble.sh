@@ -175,6 +175,63 @@ fi
 rm -f "${CONTENT}/.resolve-check.mjs"
 say "静态 import 校验通过"
 
+# ---------- fnOS 兼容补丁：附件存储的祖先目录 durability ----------
+# dsh 0.2.2 起，附件落盘前会把 <DSH_HOME> 的每一级祖先目录都 open+fsync 一遍
+# （dsh-attachment-local 的 ensureDurableHome）。飞牛上 /vol1 与 /vol1/@appshare
+# 对应用用户不可读（只给应用的目录放行），于是这一步 EACCES ——
+# 表现为「上传图片/文件失败：EACCES: permission denied, open '/vol1/@appshare'」。
+# 祖先目录的 durability 不是应用能负责的，只对 EACCES/EPERM/EROFS 放宽。
+say "应用 fnOS 附件存储兼容补丁"
+node - "${CONTENT}" <<'PATCH'
+const fs = require('node:fs');
+const path = require('node:path');
+const file = path.join(process.argv[2], 'node_modules', '@deepseek-ai', 'dsh-attachment-local', 'lib', 'index.js');
+const MARK = 'fnOS（飞牛）';
+const OLD = `async function ensureDurableHome(path) {
+	const home = resolve(path);
+	if (!durableHomes.has(home)) {
+		await ensureDurableDirectory(home, parse(home).root);
+		durableHomes.add(home);
+	}
+	return home;
+}`;
+const NEW = `async function ensureDurableHome(path) {
+	const home = resolve(path);
+	if (!durableHomes.has(home)) {
+		try {
+			await ensureDurableDirectory(home, parse(home).root);
+		} catch (error) {
+			/* fnOS（飞牛）：应用用户对 /vol1、/vol1/@appshare 这类祖先目录没有读权限，
+			   而这里会把 DSH_HOME 的每一级祖先都打开 fsync 一遍，于是 EACCES ——
+			   表现为「上传图片/文件失败」。祖先目录的 durability 不是本应用能负责的，
+			   对 EACCES/EPERM/EROFS 放宽处理，其余错误照常抛出。 */
+			const code = error && typeof error === 'object' ? error.code : void 0;
+			if (code !== 'EACCES' && code !== 'EPERM' && code !== 'EROFS') throw error;
+		}
+		durableHomes.add(home);
+	}
+	return home;
+}`;
+if (!fs.existsSync(file)) {
+  console.warn('  WARN: 未找到 dsh-attachment-local，跳过补丁');
+  process.exit(0);
+}
+const source = fs.readFileSync(file, 'utf8');
+if (source.includes(MARK)) {
+  console.log('  已打过补丁，跳过');
+  process.exit(0);
+}
+if (!source.includes(OLD)) {
+  console.error('  FATAL: 未找到 ensureDurableHome 原文，上游可能已改动；请检查是否需要更新补丁');
+  process.exit(1);
+}
+fs.writeFileSync(file, source.replace(OLD, NEW));
+console.log('  已修补 dsh-attachment-local/lib/index.js');
+PATCH
+if ! node --check "${CONTENT}/node_modules/@deepseek-ai/dsh-attachment-local/lib/index.js" 2>/dev/null; then
+    die "兼容补丁破坏了语法，中止打包"
+fi
+
 echo "==> [5/6] 瘦身、软链与权限"
 # 飞牛安装器解包后逐文件 chmod/chown，文件数越多装得越慢
 BEFORE_FILES=$(find "${CONTENT}" -type f | wc -l); BEFORE_MB=$(du -sm "${CONTENT}" | cut -f1)
