@@ -3,12 +3,12 @@
   "appname": "1panel",
   "displayName": "1Panel",
   "desc": "开源服务器运维管理面板，提供可视化的 Linux 服务器管理。",
-  "version": "2.5.0",
-  "upstream": "2.5.0",
+  "version": "2.5.1",
+  "upstream": "2.5.1",
   "categories": [
     "系统工具"
   ],
   "maintainer_url": "https://github.com/1Panel-dev/1Panel",
-  "fingerprint": "cfb926a74fb5185b",
-  "updated_at": "2026-11-11T10:43:51.103Z"
+  "fingerprint": "ce0ca1acc7fbe626",
+  "updated_at": "2026-11-12T09:42:16.672Z"
 }
