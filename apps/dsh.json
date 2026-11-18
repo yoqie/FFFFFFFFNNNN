@@ -1,23 +1,23 @@
 {
   "app_name": "dsh",
   "releases": {
-    "0.2.2-rc.4": {
-      "version": "0.2.2-rc.4",
-      "changelog": "> 上游版本 `dsh-v0.2.2-rc.4`　|　本仓库发布版本 `0.2.2-rc.4`\n\n[中文](#cn-v0.2.2-rc.4) | [English](#en-v0.2.2-rc.4)\r\n\r\n<h3 id=\"cn-v0.2.2-rc.4\">问题修复</h3>\r\n\r\n- 优化模型请求收到异常消息响应时的表现。 @turtle2099\r\n- 修复 LiveShare 在桌面端无法创建分享的问题。 @mektpoy\r\n\r\n<h3 id=\"en-v0.2.2-rc.4\">Bug Fixes</h3>\r\n\r\n- Improve handling of unexpected model responses. by @turtle2099\r\n- Fix LiveShare failing to create shares in the desktop app. by @mektpoy\r\n\r\nFull Changelog: https://github.com/deepseek-ai/deepseek-harness/compare/dsh-v0.2.2-rc.3...dsh-v0.2.2-rc.4\n\n\n---\n\n飞牛打包层改动（与上游版本无关）见 [Release 说明](https://github.com/yoqie/FFFFFFFFNNNN/releases/tag/dsh-0.2.2-rc.4)。",
-      "release_note": "DSH v0.2.2-rc.4 飞牛 fnOS 自动构建（amd64/arm64）。",
-      "updated_at": "2026-11-17T22:19:37.534Z",
+    "0.2.2-rc.5": {
+      "version": "0.2.2-rc.5",
+      "changelog": "> 上游版本 `dsh-v0.2.2-rc.5`　|　本仓库发布版本 `0.2.2-rc.5`\n\n[中文](#cn-v0.2.2-rc.5) | [English](#en-v0.2.2-rc.5)\r\n\r\n<h3 id=\"cn-v0.2.2-rc.5\">体验优化</h3>\r\n\r\n- DeepSeek 模型使用 DeepSeek 服务端搜索，搜索不按次收费；其他模型默认使用 DeepSeek Search API。 @LegGasai\r\n\r\n<h3 id=\"en-v0.2.2-rc.5\">Improvements</h3>\r\n\r\n- DeepSeek models use DeepSeek server-side search with no per-search charge; other models default to DeepSeek Search API. by @LegGasai\r\n\r\nFull Changelog: https://github.com/deepseek-ai/deepseek-harness/compare/dsh-v0.2.2-rc.4...dsh-v0.2.2-rc.5\n\n\n---\n\n飞牛打包层改动（与上游版本无关）见 [Release 说明](https://github.com/yoqie/FFFFFFFFNNNN/releases/tag/dsh-0.2.2-rc.5)。",
+      "release_note": "DSH v0.2.2-rc.5 飞牛 fnOS 自动构建（amd64/arm64）。",
+      "updated_at": "2026-11-18T13:57:01.909Z",
       "packages": {
         "x86": {
-          "version": "0.2.2-rc.4",
-          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.2-rc.4/DSH_v0.2.2-rc.4_amd64_4ffa2f9420f5.fpk",
-          "sha256": "4ffa2f9420f5ad9c45a16d0edf6543ea4b65530d3fbb6280fc5f8ccd0c60e35f",
-          "size": 165865888
+          "version": "0.2.2-rc.5",
+          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.2-rc.5/DSH_v0.2.2-rc.5_amd64_2961a56c6709.fpk",
+          "sha256": "2961a56c6709444b1a944f9481fc7d592dcba134ee72ec7bab306af5b432287d",
+          "size": 165933815
         },
         "arm": {
-          "version": "0.2.2-rc.4",
-          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.2-rc.4/DSH_v0.2.2-rc.4_arm64_91d944f0a1aa.fpk",
-          "sha256": "91d944f0a1aaac934232f023d58d6ae38b0a6bd59bd00b069c509927c5371da1",
-          "size": 168864808
+          "version": "0.2.2-rc.5",
+          "download_url": "https://github.com/yoqie/FFFFFFFFNNNN/releases/download/dsh-0.2.2-rc.5/DSH_v0.2.2-rc.5_arm64_b39ad9a8b3ad.fpk",
+          "sha256": "b39ad9a8b3ada69fbec1b9af686afbd5edea1117d06c2f16e0495af41daa5c99",
+          "size": 168893994
         }
       }
     }
@@ -43,5 +43,5 @@
   "install_type": "root",
   "is_docker": false,
   "service_port": "3080",
-  "updated_at": "2026-11-17T22:19:37.534Z"
+  "updated_at": "2026-11-18T13:57:01.909Z"
 }
